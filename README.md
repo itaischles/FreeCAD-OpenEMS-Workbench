@@ -16,4 +16,6 @@ Phase 1 establishes the external workbench scaffold, FreeCAD entrypoints, a plac
 2. Run `tools/deploy_workbench.py` to mirror the workbench into the user FreeCAD `Mod` directory.
 3. Start FreeCAD and switch to the `OpenEMS` workbench.
 
+Git usage conventions for this repository are documented in `docs/git-workflow.md`.
+
 The local virtual environment helper in `SetupBasicPythonEnv.bat` is optional and not part of the workbench runtime contract.

@@ -1,0 +1,15 @@
+# <type>(<scope>): <short summary>
+#
+# Allowed types:
+# feat, fix, refactor, docs, test, chore
+#
+# Recommended scopes for this repo:
+# workbench, objects, commands, gui, exporter, execution, meshing, validation, docs, tests
+#
+# Body (optional): explain why, key technical choices, and side effects.
+#
+# Validation (optional):
+# - tests: <what you ran>
+# - freecad: <manual checks done>
+#
+
