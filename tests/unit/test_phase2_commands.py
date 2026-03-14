@@ -13,13 +13,17 @@ def test_workbench_command_registry_contains_phase2_commands():
     from OpenEMSWorkbench.commands import workbench_commands
 
     expected = {
+        "OpenEMS_CreateAnalysis",
         "OpenEMS_CreateSimulation",
         "OpenEMS_CreateMaterial",
         "OpenEMS_CreateBoundary",
         "OpenEMS_CreatePort",
         "OpenEMS_CreateGrid",
         "OpenEMS_CreateDumpBox",
+        "OpenEMS_SetActiveAnalysis",
+        "OpenEMS_AssignSelectedToActiveAnalysis",
         "OpenEMS_EditSelected",
+        "OpenEMS_RunPreflight",
     }
     assert expected.issubset(set(workbench_commands.WORKBENCH_COMMANDS))
 
@@ -27,6 +31,7 @@ def test_workbench_command_registry_contains_phase2_commands():
 def test_object_command_definitions_exist():
     from OpenEMSWorkbench.commands.object_commands import COMMAND_DEFINITIONS, EDIT_COMMAND_NAME
 
-    assert len(COMMAND_DEFINITIONS) == 6
+    assert len(COMMAND_DEFINITIONS) == 7
+    assert "OpenEMS_CreateAnalysis" in COMMAND_DEFINITIONS
     assert "OpenEMS_CreateSimulation" in COMMAND_DEFINITIONS
     assert EDIT_COMMAND_NAME == "OpenEMS_EditSelected"

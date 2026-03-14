@@ -49,3 +49,15 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 6. Re-open edit mode and click `Cancel`; verify no additional changes are applied.
 7. Double-click each OpenEMS object in the tree and verify the corresponding task panel opens.
 8. Save the document, close FreeCAD, reopen it, and verify edited values are preserved without report-view errors.
+
+## Phase 4 manual verification
+
+1. Deploy the workbench and open FreeCAD with a new document.
+2. Click `Create Analysis` and verify an `openEMS Analysis` object appears.
+3. Create one Simulation, one Grid, one Boundary, at least one Material, and one Port.
+4. Select the Analysis object and run `Set Active Analysis`.
+5. Select all created OpenEMS objects and run `Assign Selected To Active Analysis`.
+6. Select `Run Preflight` and verify report-view output ends with a summary line.
+7. Intentionally break the setup (for example remove the Grid from analysis group or duplicate a port number) and run preflight again.
+8. Verify preflight prints actionable error lines and reports failure when errors are present.
+9. Save, close, and reopen the document; verify analysis group membership and object properties are preserved.

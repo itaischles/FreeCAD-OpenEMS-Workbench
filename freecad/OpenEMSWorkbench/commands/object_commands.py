@@ -11,6 +11,7 @@ except ImportError:  # pragma: no cover - only in FreeCAD runtime
 
 try:
     from objects import (
+        create_analysis,
         create_boundary,
         create_dumpbox,
         create_grid,
@@ -20,6 +21,7 @@ try:
     )
 except ImportError:
     from OpenEMSWorkbench.objects import (
+        create_analysis,
         create_boundary,
         create_dumpbox,
         create_grid,
@@ -28,8 +30,35 @@ except ImportError:
         create_simulation,
     )
 
+try:
+    from utils.analysis_context import (
+        assign_members_to_analysis_detailed,
+        get_active_analysis,
+        get_analyses,
+        get_proxy_type,
+        set_active_analysis,
+    )
+except ImportError:
+    from OpenEMSWorkbench.utils.analysis_context import (
+        assign_members_to_analysis_detailed,
+        get_active_analysis,
+        get_analyses,
+        get_proxy_type,
+        set_active_analysis,
+    )
+
+try:
+    from validation import format_findings, run_preflight, summarize_findings
+except ImportError:
+    from OpenEMSWorkbench.validation import format_findings, run_preflight, summarize_findings
+
 
 COMMAND_DEFINITIONS = {
+    "OpenEMS_CreateAnalysis": {
+        "menu_text": "Create Analysis",
+        "tooltip": "Create an openEMS analysis ownership container.",
+        "factory": create_analysis,
+    },
     "OpenEMS_CreateSimulation": {
         "menu_text": "Create Simulation",
         "tooltip": "Create an openEMS simulation container object.",
@@ -63,6 +92,9 @@ COMMAND_DEFINITIONS = {
 }
 
 EDIT_COMMAND_NAME = "OpenEMS_EditSelected"
+SET_ACTIVE_ANALYSIS_COMMAND = "OpenEMS_SetActiveAnalysis"
+ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND = "OpenEMS_AssignSelectedToActiveAnalysis"
+RUN_PREFLIGHT_COMMAND = "OpenEMS_RunPreflight"
 
 
 def _command_icon() -> str:
@@ -171,6 +203,116 @@ class _EditSelectedObjectCommand:
         return len(Gui.Selection.getSelection()) == 1
 
 
+class _SetActiveAnalysisCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Set Active Analysis",
+            "ToolTip": "Set selected OpenEMS Analysis as active.",
+            "Pixmap": _command_icon(),
+        }
+
+    def Activated(self):
+        if App is None or Gui is None:
+            return
+        if App.ActiveDocument is None:
+            App.Console.PrintError("OpenEMS: No active document. Create a document first.\n")
+            return
+
+        selection = Gui.Selection.getSelection()
+        if len(selection) != 1:
+            App.Console.PrintError("OpenEMS: Select exactly one Analysis object.\n")
+            return
+
+        selected = selection[0]
+        if get_proxy_type(selected) != "OpenEMS_Analysis":
+            App.Console.PrintError("OpenEMS: Selected object is not an Analysis object.\n")
+            return
+
+        set_active_analysis(App.ActiveDocument, selected)
+        App.ActiveDocument.recompute()
+        App.Console.PrintMessage(f"OpenEMS: Active analysis set to '{selected.Label}'.\n")
+
+    def IsActive(self):
+        return App is not None and Gui is not None and App.ActiveDocument is not None
+
+
+class _AssignSelectedToActiveAnalysisCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Assign Selected To Active Analysis",
+            "ToolTip": "Add selected OpenEMS objects to the active analysis group.",
+            "Pixmap": _command_icon(),
+        }
+
+    def Activated(self):
+        if App is None or Gui is None:
+            return
+        doc = App.ActiveDocument
+        if doc is None:
+            App.Console.PrintError("OpenEMS: No active document. Create a document first.\n")
+            return
+
+        analysis = get_active_analysis(doc)
+        if analysis is None:
+            App.Console.PrintError("OpenEMS: No active analysis found. Create one first.\n")
+            return
+
+        selection = Gui.Selection.getSelection()
+        if not selection:
+            App.Console.PrintError("OpenEMS: Select one or more OpenEMS objects to assign.\n")
+            return
+
+        details = assign_members_to_analysis_detailed(analysis, selection)
+        doc.recompute()
+        App.Console.PrintMessage(
+            "OpenEMS: Assignment result for "
+            f"'{analysis.Label}': added={details['added']}, "
+            f"already_member={details['already_member']}, ignored={details['ignored']}.\n"
+        )
+
+    def IsActive(self):
+        return App is not None and Gui is not None and App.ActiveDocument is not None
+
+
+class _RunPreflightCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Run Preflight",
+            "ToolTip": "Run OpenEMS analysis preflight validation checks.",
+            "Pixmap": _command_icon(),
+        }
+
+    def Activated(self):
+        if App is None:
+            return
+        doc = App.ActiveDocument
+        if doc is None:
+            App.Console.PrintError("OpenEMS: No active document. Create a document first.\n")
+            return
+
+        analysis = get_active_analysis(doc)
+        if analysis is None:
+            analyses = get_analyses(doc)
+            if len(analyses) == 1:
+                analysis = analyses[0]
+            else:
+                App.Console.PrintError("OpenEMS: No active analysis found.\n")
+                return
+
+        findings = run_preflight(analysis)
+        for line in format_findings(findings):
+            App.Console.PrintMessage(f"OpenEMS Preflight: {line}\n")
+
+        summary = summarize_findings(findings)
+        if not summary["ok"]:
+            App.Console.PrintError("OpenEMS: Preflight failed (errors present).\n")
+        else:
+            App.Console.PrintMessage("OpenEMS: Preflight passed.\n")
+
+    def IsActive(self):
+        return App is not None and App.ActiveDocument is not None
+
+
 def register_object_commands() -> list[str]:
     if Gui is None:
         return []
@@ -184,15 +326,34 @@ def register_object_commands() -> list[str]:
     if EDIT_COMMAND_NAME not in Gui.listCommands():
         Gui.addCommand(EDIT_COMMAND_NAME, _EditSelectedObjectCommand())
     registered.append(EDIT_COMMAND_NAME)
+
+    if SET_ACTIVE_ANALYSIS_COMMAND not in Gui.listCommands():
+        Gui.addCommand(SET_ACTIVE_ANALYSIS_COMMAND, _SetActiveAnalysisCommand())
+    registered.append(SET_ACTIVE_ANALYSIS_COMMAND)
+
+    if ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND not in Gui.listCommands():
+        Gui.addCommand(
+            ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND,
+            _AssignSelectedToActiveAnalysisCommand(),
+        )
+    registered.append(ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND)
+
+    if RUN_PREFLIGHT_COMMAND not in Gui.listCommands():
+        Gui.addCommand(RUN_PREFLIGHT_COMMAND, _RunPreflightCommand())
+    registered.append(RUN_PREFLIGHT_COMMAND)
     return registered
 
 
 WORKBENCH_OBJECT_COMMANDS = [
+    "OpenEMS_CreateAnalysis",
     "OpenEMS_CreateSimulation",
     "OpenEMS_CreateMaterial",
     "OpenEMS_CreateBoundary",
     "OpenEMS_CreatePort",
     "OpenEMS_CreateGrid",
     "OpenEMS_CreateDumpBox",
+    SET_ACTIVE_ANALYSIS_COMMAND,
+    ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND,
     EDIT_COMMAND_NAME,
+    RUN_PREFLIGHT_COMMAND,
 ]
