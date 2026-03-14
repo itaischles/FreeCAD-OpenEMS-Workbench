@@ -53,11 +53,6 @@ except ImportError:
     from OpenEMSWorkbench.validation import format_findings, run_preflight, summarize_findings
 
 try:
-    from execution import preflight_gate, run_analysis
-except ImportError:
-    from OpenEMSWorkbench.execution import preflight_gate, run_analysis
-
-try:
     from exporter import export_analysis_dry_run
 except ImportError:
     from OpenEMSWorkbench.exporter import export_analysis_dry_run
@@ -147,6 +142,12 @@ def _resolve_mesh(doc):
         return None, None, str(exc)
     except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
         return None, None, f"Unexpected mesh resolution error: {exc}"
+
+
+def _preflight_gate(analysis):
+    findings = run_preflight(analysis)
+    summary = summarize_findings(findings)
+    return summary["ok"], findings, summary
 
 
 class _CreateObjectCommand:
@@ -377,7 +378,7 @@ class _ExportDryRunCommand:
                 App.Console.PrintError("OpenEMS: No active analysis found.\n")
                 return
 
-        ok, findings, summary = preflight_gate(analysis)
+        ok, findings, summary = _preflight_gate(analysis)
         if not ok:
             App.Console.PrintError("OpenEMS: Export blocked by preflight errors.\n")
             for line in format_findings(findings):
@@ -482,6 +483,15 @@ class _RunSimulationCommand:
         )
 
         App.Console.PrintMessage("OpenEMS: Running simulation (blocking mode).\n")
+        try:
+            try:
+                from execution import run_analysis
+            except ImportError:
+                from OpenEMSWorkbench.execution import run_analysis
+        except Exception as exc:
+            App.Console.PrintError(f"OpenEMS: Failed to load execution module: {exc}\n")
+            return
+
         result = run_analysis(
             analysis,
             export_base,
@@ -554,44 +564,90 @@ def register_object_commands() -> list[str]:
 
     registered = []
     for command_name in COMMAND_DEFINITIONS:
-        if command_name not in Gui.listCommands():
-            Gui.addCommand(command_name, _CreateObjectCommand(command_name))
-        registered.append(command_name)
+        try:
+            if command_name not in Gui.listCommands():
+                Gui.addCommand(command_name, _CreateObjectCommand(command_name))
+            registered.append(command_name)
+        except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+            if App is not None:
+                App.Console.PrintError(
+                    f"OpenEMS: Failed to register command '{command_name}': {exc}\n"
+                )
 
-    if EDIT_COMMAND_NAME not in Gui.listCommands():
-        Gui.addCommand(EDIT_COMMAND_NAME, _EditSelectedObjectCommand())
-    registered.append(EDIT_COMMAND_NAME)
+    try:
+        if EDIT_COMMAND_NAME not in Gui.listCommands():
+            Gui.addCommand(EDIT_COMMAND_NAME, _EditSelectedObjectCommand())
+        registered.append(EDIT_COMMAND_NAME)
+    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+        if App is not None:
+            App.Console.PrintError(f"OpenEMS: Failed to register command '{EDIT_COMMAND_NAME}': {exc}\n")
 
-    if SET_ACTIVE_ANALYSIS_COMMAND not in Gui.listCommands():
-        Gui.addCommand(SET_ACTIVE_ANALYSIS_COMMAND, _SetActiveAnalysisCommand())
-    registered.append(SET_ACTIVE_ANALYSIS_COMMAND)
+    try:
+        if SET_ACTIVE_ANALYSIS_COMMAND not in Gui.listCommands():
+            Gui.addCommand(SET_ACTIVE_ANALYSIS_COMMAND, _SetActiveAnalysisCommand())
+        registered.append(SET_ACTIVE_ANALYSIS_COMMAND)
+    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+        if App is not None:
+            App.Console.PrintError(
+                f"OpenEMS: Failed to register command '{SET_ACTIVE_ANALYSIS_COMMAND}': {exc}\n"
+            )
 
-    if ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND not in Gui.listCommands():
-        Gui.addCommand(
-            ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND,
-            _AssignSelectedToActiveAnalysisCommand(),
-        )
-    registered.append(ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND)
+    try:
+        if ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND not in Gui.listCommands():
+            Gui.addCommand(
+                ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND,
+                _AssignSelectedToActiveAnalysisCommand(),
+            )
+        registered.append(ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND)
+    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+        if App is not None:
+            App.Console.PrintError(
+                f"OpenEMS: Failed to register command '{ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND}': {exc}\n"
+            )
 
-    if RUN_PREFLIGHT_COMMAND not in Gui.listCommands():
-        Gui.addCommand(RUN_PREFLIGHT_COMMAND, _RunPreflightCommand())
-    registered.append(RUN_PREFLIGHT_COMMAND)
+    try:
+        if RUN_PREFLIGHT_COMMAND not in Gui.listCommands():
+            Gui.addCommand(RUN_PREFLIGHT_COMMAND, _RunPreflightCommand())
+        registered.append(RUN_PREFLIGHT_COMMAND)
+    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+        if App is not None:
+            App.Console.PrintError(f"OpenEMS: Failed to register command '{RUN_PREFLIGHT_COMMAND}': {exc}\n")
 
-    if EXPORT_DRY_RUN_COMMAND not in Gui.listCommands():
-        Gui.addCommand(EXPORT_DRY_RUN_COMMAND, _ExportDryRunCommand())
-    registered.append(EXPORT_DRY_RUN_COMMAND)
+    try:
+        if EXPORT_DRY_RUN_COMMAND not in Gui.listCommands():
+            Gui.addCommand(EXPORT_DRY_RUN_COMMAND, _ExportDryRunCommand())
+        registered.append(EXPORT_DRY_RUN_COMMAND)
+    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+        if App is not None:
+            App.Console.PrintError(f"OpenEMS: Failed to register command '{EXPORT_DRY_RUN_COMMAND}': {exc}\n")
 
-    if RUN_SIMULATION_COMMAND not in Gui.listCommands():
-        Gui.addCommand(RUN_SIMULATION_COMMAND, _RunSimulationCommand())
-    registered.append(RUN_SIMULATION_COMMAND)
+    try:
+        if RUN_SIMULATION_COMMAND not in Gui.listCommands():
+            Gui.addCommand(RUN_SIMULATION_COMMAND, _RunSimulationCommand())
+        registered.append(RUN_SIMULATION_COMMAND)
+    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+        if App is not None:
+            App.Console.PrintError(f"OpenEMS: Failed to register command '{RUN_SIMULATION_COMMAND}': {exc}\n")
 
-    if SHOW_HIDE_MESH_OVERLAY_COMMAND not in Gui.listCommands():
-        Gui.addCommand(SHOW_HIDE_MESH_OVERLAY_COMMAND, _ShowHideMeshOverlayCommand())
-    registered.append(SHOW_HIDE_MESH_OVERLAY_COMMAND)
+    try:
+        if SHOW_HIDE_MESH_OVERLAY_COMMAND not in Gui.listCommands():
+            Gui.addCommand(SHOW_HIDE_MESH_OVERLAY_COMMAND, _ShowHideMeshOverlayCommand())
+        registered.append(SHOW_HIDE_MESH_OVERLAY_COMMAND)
+    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+        if App is not None:
+            App.Console.PrintError(
+                f"OpenEMS: Failed to register command '{SHOW_HIDE_MESH_OVERLAY_COMMAND}': {exc}\n"
+            )
 
-    if REFRESH_MESH_OVERLAY_COMMAND not in Gui.listCommands():
-        Gui.addCommand(REFRESH_MESH_OVERLAY_COMMAND, _RefreshMeshOverlayCommand())
-    registered.append(REFRESH_MESH_OVERLAY_COMMAND)
+    try:
+        if REFRESH_MESH_OVERLAY_COMMAND not in Gui.listCommands():
+            Gui.addCommand(REFRESH_MESH_OVERLAY_COMMAND, _RefreshMeshOverlayCommand())
+        registered.append(REFRESH_MESH_OVERLAY_COMMAND)
+    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+        if App is not None:
+            App.Console.PrintError(
+                f"OpenEMS: Failed to register command '{REFRESH_MESH_OVERLAY_COMMAND}': {exc}\n"
+            )
     return registered
 
 
