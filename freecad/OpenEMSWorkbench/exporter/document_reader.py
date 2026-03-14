@@ -41,7 +41,17 @@ def read_analysis_for_export(analysis) -> dict:
         "analysis_name": str(getattr(analysis, "Name", "analysis")),
         "simulation": _object_to_dict(
             simulation,
-            ["SolverName", "CoordinateSystem", "DeltaUnit", "NumberOfTimeSteps", "EndCriteria", "OutputDirectory"],
+            [
+                "SolverName",
+                "CoordinateSystem",
+                "DeltaUnit",
+                "NumberOfTimeSteps",
+                "EndCriteria",
+                "OutputDirectory",
+                "SolverExecutable",
+                "SolverArguments",
+                "RunBlocking",
+            ],
         )
         if simulation is not None
         else {},

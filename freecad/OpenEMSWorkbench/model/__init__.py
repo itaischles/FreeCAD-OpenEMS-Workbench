@@ -11,6 +11,9 @@ DEFAULTS = {
 		"delta_unit": 1e-3,
 		"nr_ts": 100000,
 		"end_criteria": 1e-5,
+		"solver_executable": "",
+		"solver_arguments": "",
+		"run_blocking": True,
 	},
 	"material": {
 		"epsilon_r": 1.0,

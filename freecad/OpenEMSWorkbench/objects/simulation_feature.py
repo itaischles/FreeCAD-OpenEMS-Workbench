@@ -70,6 +70,30 @@ class OpenEMSSimulationProxy(FeatureProxyBase):
             "Simulation output directory.",
             "",
         )
+        add_property_if_missing(
+            obj,
+            "App::PropertyString",
+            "SolverExecutable",
+            "Run",
+            "Executable used to run generated openEMS script.",
+            DEFAULTS["simulation"]["solver_executable"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyString",
+            "SolverArguments",
+            "Run",
+            "Optional arguments passed to the solver executable.",
+            DEFAULTS["simulation"]["solver_arguments"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyBool",
+            "RunBlocking",
+            "Run",
+            "Run solver synchronously in FreeCAD UI thread.",
+            DEFAULTS["simulation"]["run_blocking"],
+        )
         set_enum_choices(
             obj,
             "CoordinateSystem",
