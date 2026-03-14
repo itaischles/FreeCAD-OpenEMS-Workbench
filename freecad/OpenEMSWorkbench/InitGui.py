@@ -19,53 +19,63 @@ class OpenEMSWorkbench(Gui.Workbench):
         self.__class__.ToolTip = "Workbench scaffold for openEMS FDTD model setup"
 
     def Initialize(self):
-        command_names = [
-            "OpenEMS_CreateAnalysis",
-            "OpenEMS_CreateSimulation",
-            "OpenEMS_CreateMaterial",
-            "OpenEMS_CreateBoundary",
-            "OpenEMS_CreatePort",
-            "OpenEMS_CreateGrid",
-            "OpenEMS_CreateDumpBox",
-            "OpenEMS_SetActiveAnalysis",
-            "OpenEMS_AssignSelectedToActiveAnalysis",
-            "OpenEMS_EditSelected",
-            "OpenEMS_RunPreflight",
-            "OpenEMS_ExportDryRun",
-            "OpenEMS_RunSimulation",
-            "OpenEMS_ShowHideMeshOverlay",
-            "OpenEMS_RefreshMeshOverlay",
-        ]
+        all_commands = []
+        toolbar_commands = []
+        menu_groups = []
         try:
             try:
                 from commands.workbench_commands import (
                     WORKBENCH_COMMANDS,
+                    WORKBENCH_MENU,
+                    WORKBENCH_TOOLBAR,
                     register_commands,
                 )
             except ImportError:
                 from OpenEMSWorkbench.commands.workbench_commands import (
                     WORKBENCH_COMMANDS,
+                    WORKBENCH_MENU,
+                    WORKBENCH_TOOLBAR,
                     register_commands,
                 )
 
-            command_names = list(WORKBENCH_COMMANDS)
+            all_commands = list(WORKBENCH_COMMANDS)
+            toolbar_commands = list(WORKBENCH_TOOLBAR)
+            menu_groups = [(name, list(commands)) for name, commands in WORKBENCH_MENU]
 
+            registered = set(all_commands)
             try:
-                register_commands()
+                registered = set(register_commands())
             except Exception as exc:
                 App.Console.PrintError(
                     f"OpenEMS command registration warning: {exc}\n"
                 )
                 App.Console.PrintMessage(traceback.format_exc())
 
-            self.appendToolbar("OpenEMS", command_names)
-            self.appendMenu("OpenEMS", command_names)
+            active_toolbar = [cmd for cmd in toolbar_commands if cmd in registered]
+            if active_toolbar:
+                self.appendToolbar("OpenEMS", active_toolbar)
+
+            for group_name, group_commands in menu_groups:
+                active_group = [cmd for cmd in group_commands if cmd in registered]
+                if active_group:
+                    self.appendMenu(["OpenEMS", group_name], active_group)
+
             App.Console.PrintMessage("OpenEMS workbench initialized.\n")
         except Exception as exc:  # pragma: no cover - only exercised in FreeCAD GUI
             # Keep menu visibility even when optional command imports fail.
             try:
-                self.appendToolbar("OpenEMS", command_names)
-                self.appendMenu("OpenEMS", command_names)
+                if toolbar_commands:
+                    self.appendToolbar("OpenEMS", toolbar_commands)
+
+                for group_name, group_commands in menu_groups:
+                    if group_commands:
+                        self.appendMenu(["OpenEMS", group_name], group_commands)
+
+                if not toolbar_commands and all_commands:
+                    self.appendToolbar("OpenEMS", all_commands)
+                if not menu_groups and all_commands:
+                    self.appendMenu("OpenEMS", all_commands)
+
                 App.Console.PrintError(f"OpenEMS initialization warning: {exc}\n")
                 App.Console.PrintMessage(traceback.format_exc())
             except Exception as inner_exc:

@@ -28,3 +28,14 @@ def test_command_module_imports_without_freecad():
 
     assert "OpenEMS_CreateSimulation" in workbench_commands.WORKBENCH_COMMANDS
     assert "OpenEMS_EditSelected" in workbench_commands.WORKBENCH_COMMANDS
+    assert "OpenEMS_RunSimulation" in workbench_commands.WORKBENCH_TOOLBAR
+    assert any(section == "Runtime" for section, _ in workbench_commands.WORKBENCH_MENU)
+
+
+def test_command_icon_metadata_is_complete():
+    from OpenEMSWorkbench.commands import object_commands
+
+    expected_icon_keys = set(object_commands.WORKBENCH_OBJECT_COMMANDS) - set(
+        object_commands.COMMAND_DEFINITIONS.keys()
+    )
+    assert expected_icon_keys.issubset(set(object_commands.COMMAND_ICON_FILES.keys()))
