@@ -20,9 +20,9 @@ except ImportError:
 	from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
 
 try:
-	from io import run_process_blocking
+	from execution.process_runner import run_process_blocking
 except ImportError:
-	from OpenEMSWorkbench.io import run_process_blocking
+	from OpenEMSWorkbench.execution.process_runner import run_process_blocking
 
 
 @dataclass
