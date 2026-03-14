@@ -161,6 +161,25 @@ def _check_output_directory(members) -> list[PreflightFinding]:
     return findings
 
 
+def _check_solver_configuration(members) -> list[PreflightFinding]:
+    findings: list[PreflightFinding] = []
+    if not members.simulations:
+        return findings
+
+    sim = members.simulations[0]
+    executable = str(getattr(sim, "SolverExecutable", "")).strip()
+    if not executable:
+        findings.append(
+            _finding(
+                "warning",
+                "simulation.solver_executable_configured",
+                "SolverExecutable is empty. Run Simulation command will fail until configured.",
+                sim,
+            )
+        )
+    return findings
+
+
 def run_preflight(analysis: Any) -> list[PreflightFinding]:
     if analysis is None:
         return [
@@ -178,6 +197,7 @@ def run_preflight(analysis: Any) -> list[PreflightFinding]:
     findings.extend(_check_coordinate_system(members))
     findings.extend(_check_dumpbox_frequency(members))
     findings.extend(_check_output_directory(members))
+    findings.extend(_check_solver_configuration(members))
 
     for unknown in members.unknown:
         findings.append(

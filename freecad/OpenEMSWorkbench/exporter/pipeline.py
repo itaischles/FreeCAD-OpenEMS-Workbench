@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from pathlib import Path
 
 try:
@@ -24,11 +23,7 @@ except ImportError:
     from OpenEMSWorkbench.utils.export_paths import build_export_paths, ensure_export_dirs
 
 
-def export_analysis_dry_run(analysis, base_output_dir: str | Path, document_name: str) -> dict:
-    extracted = read_analysis_for_export(analysis)
-    paths = build_export_paths(base_output_dir, document_name, extracted["analysis_name"])
-    ensure_export_dirs(paths)
-
+def _build_export_model(extracted: dict, stl_dir: Path) -> ExportModel:
     model = ExportModel(
         analysis_name=extracted["analysis_name"],
         simulation=extracted["simulation"],
@@ -45,14 +40,51 @@ def export_analysis_dry_run(analysis, base_output_dir: str | Path, document_name
         if geometry_kind in {"box", "cylinder"}:
             model.geometries.append(map_primitive_geometry(obj, geometry_kind))
         else:
-            model.geometries.append(export_as_stl_entry(obj, paths["stl_dir"]))
+            model.geometries.append(export_as_stl_entry(obj, stl_dir))
 
-    generate_openems_script(model, paths["script"])
+    return model
 
-    return {
+
+def _result_dict(paths: dict, model: ExportModel, run_output_dir: Path | None = None) -> dict:
+    result = {
         "paths": {k: str(v) for k, v in paths.items()},
         "analysis": model.analysis_name,
         "geometry_count": len(model.geometries),
         "primitive_count": sum(1 for g in model.geometries if g.primitive in {"box", "cylinder"}),
         "stl_count": sum(1 for g in model.geometries if g.primitive == "polyhedron"),
     }
+    if run_output_dir is not None:
+        result["run_output_dir"] = str(run_output_dir)
+    return result
+
+
+def export_analysis_dry_run(analysis, base_output_dir: str | Path, document_name: str) -> dict:
+    extracted = read_analysis_for_export(analysis)
+    paths = build_export_paths(base_output_dir, document_name, extracted["analysis_name"])
+    ensure_export_dirs(paths)
+    model = _build_export_model(extracted, paths["stl_dir"])
+    generate_openems_script(model, paths["script"], runnable=False)
+    return _result_dict(paths, model)
+
+
+def export_analysis_run_ready(
+    analysis,
+    base_output_dir: str | Path,
+    document_name: str,
+    run_output_dir: str | Path | None = None,
+) -> dict:
+    extracted = read_analysis_for_export(analysis)
+    paths = build_export_paths(base_output_dir, document_name, extracted["analysis_name"])
+    ensure_export_dirs(paths)
+
+    run_dir = Path(run_output_dir) if run_output_dir else paths["run_dir"]
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    model = _build_export_model(extracted, paths["stl_dir"])
+    generate_openems_script(
+        model,
+        paths["script"],
+        runnable=True,
+        run_output_dir=run_dir,
+    )
+    return _result_dict(paths, model, run_output_dir=run_dir)
