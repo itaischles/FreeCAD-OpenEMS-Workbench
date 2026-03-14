@@ -82,3 +82,19 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 6. Run `Refresh Mesh Overlay` and verify the displayed mesh updates.
 7. Run `Refresh Mesh Overlay` again without property changes and verify report view indicates refresh skip or no unnecessary redraw behavior.
 8. Switch documents or views and verify no stale overlay artifacts remain and no report-view errors occur.
+
+## Phase 7 manual verification
+
+1. Deploy the workbench and open FreeCAD.
+2. Create a valid analysis containing Simulation, Grid, Material, Boundary, and Port objects.
+3. Ensure `OPENEMS_INSTALL_DIR` points to your openEMS installation root (example `C:\openEMS`) so DLLs can be loaded.
+4. Run `Configure Runtime...` once and select a Python interpreter that has `openEMS` and `CSXCAD` Python modules.
+5. Open Simulation task panel and confirm `RunBlocking` is enabled.
+6. Run `Validate Runtime` and verify either:
+	- auto-detection finds a compatible Python runtime and reports success, or
+	- a clear failure message explains why runtime discovery failed.
+7. Run `Run Preflight` and verify warnings/errors are understandable.
+8. Run `Run Simulation` and verify report view shows runtime check status, run start, completion/failure, script path, and stdout/stderr log paths.
+9. Open the generated `stdout.log` and `stderr.log` files and verify process output was captured.
+10. Intentionally set `SolverExecutable` to `openEMS.exe` and rerun `Validate Runtime`; verify it reports script-mode mismatch with actionable guidance.
+11. Confirm `Export Dry-Run Script` and mesh overlay commands still behave as expected after run integration.

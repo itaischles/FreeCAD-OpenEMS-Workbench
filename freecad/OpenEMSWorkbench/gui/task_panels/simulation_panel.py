@@ -20,4 +20,7 @@ class SimulationTaskPanel(BaseObjectTaskPanel):
         {"name": "NumberOfTimeSteps", "label": "Number Of Time Steps", "type": "int"},
         {"name": "EndCriteria", "label": "End Criteria", "type": "float"},
         {"name": "OutputDirectory", "label": "Output Directory", "type": "string"},
+        {"name": "SolverExecutable", "label": "Solver Executable", "type": "string"},
+        {"name": "SolverArguments", "label": "Solver Arguments", "type": "string"},
+        {"name": "RunBlocking", "label": "Run Blocking", "type": "bool"},
     ]
