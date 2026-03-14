@@ -11,6 +11,11 @@ except ImportError:
 	from OpenEMSWorkbench.validation import run_preflight, summarize_findings
 
 try:
+	from validation.member_collection import collect_members
+except ImportError:
+	from OpenEMSWorkbench.validation.member_collection import collect_members
+
+try:
 	from exporter import export_analysis_run_ready
 except ImportError:
 	from OpenEMSWorkbench.exporter import export_analysis_run_ready
@@ -22,8 +27,13 @@ except ImportError:
 
 try:
 	from execution.process_runner import run_process_blocking
+	from execution.runtime_discovery import discover_python_runtime, validate_python_runtime
 except ImportError:
 	from OpenEMSWorkbench.execution.process_runner import run_process_blocking
+	from OpenEMSWorkbench.execution.runtime_discovery import (
+		discover_python_runtime,
+		validate_python_runtime,
+	)
 
 
 @dataclass
@@ -54,6 +64,51 @@ def _parse_arguments(arguments: str) -> list[str]:
 def _looks_like_openems_binary(executable: str) -> bool:
 	name = os.path.basename(executable).lower().strip()
 	return name in {"openems", "openems.exe"}
+
+
+def _primary_simulation(analysis):
+	members = collect_members(analysis)
+	return members.simulations[0] if members.simulations else None
+
+
+def auto_configure_solver_runtime(analysis) -> tuple[bool, str]:
+	simulation = _primary_simulation(analysis)
+	if simulation is None:
+		return False, "No Simulation object found in active analysis."
+
+	configured = str(getattr(simulation, "SolverExecutable", "")).strip()
+	if configured:
+		return True, f"SolverExecutable already configured: {configured}"
+
+	discovery = discover_python_runtime()
+	if not discovery.ok:
+		checked = " | ".join(discovery.checked[-3:]) if discovery.checked else ""
+		suffix = f" Checked: {checked}" if checked else ""
+		return False, f"{discovery.message}{suffix}"
+
+	simulation.SolverExecutable = discovery.executable
+	if hasattr(simulation, "SolverArguments"):
+		simulation.SolverArguments = str(getattr(simulation, "SolverArguments", "") or "")
+	return True, discovery.message
+
+
+def validate_configured_solver_runtime(analysis) -> tuple[bool, str]:
+	simulation = _primary_simulation(analysis)
+	if simulation is None:
+		return False, "No Simulation object found in active analysis."
+
+	executable = str(getattr(simulation, "SolverExecutable", "")).strip()
+	if not executable:
+		return False, "SolverExecutable is empty."
+
+	if _looks_like_openems_binary(executable):
+		return (
+			False,
+			"SolverExecutable points to openEMS.exe. Current Phase 7 runner executes a Python script; "
+			"please use a Python interpreter with openEMS/CSXCAD modules.",
+		)
+
+	return validate_python_runtime(executable)
 
 
 def run_analysis(
@@ -93,14 +148,11 @@ def run_analysis(
 			findings=findings,
 		)
 
-	if _looks_like_openems_binary(solver_executable):
+	runtime_ok, runtime_message = validate_configured_solver_runtime(analysis)
+	if not runtime_ok:
 		return ExecutionResult(
 			status="failed",
-			message=(
-				"SolverExecutable points to openEMS.exe, but Phase 7 Run Simulation "
-				"executes the generated Python script. Set SolverExecutable to a Python "
-				"interpreter that has openEMS/CSXCAD Python modules installed."
-			),
+			message=runtime_message,
 			preflight_summary=summary,
 			findings=findings,
 		)
@@ -171,4 +223,10 @@ def run_analysis(
 	)
 
 
-__all__ = ["ExecutionResult", "preflight_gate", "run_analysis"]
+__all__ = [
+	"ExecutionResult",
+	"preflight_gate",
+	"auto_configure_solver_runtime",
+	"validate_configured_solver_runtime",
+	"run_analysis",
+]

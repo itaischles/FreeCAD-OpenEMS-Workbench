@@ -19,6 +19,22 @@ class _ProcessResultStub:
         self.stderr_log = "C:/tmp/stderr.log"
 
 
+class _SimulationProxy:
+    TYPE = "OpenEMS_Simulation"
+
+
+class _SimulationStub:
+    def __init__(self, executable=""):
+        self.Proxy = _SimulationProxy()
+        self.SolverExecutable = executable
+        self.SolverArguments = ""
+
+
+class _AnalysisStub:
+    def __init__(self, simulation):
+        self.Group = [simulation]
+
+
 def test_run_analysis_blocks_on_preflight_errors(monkeypatch, tmp_path):
     from OpenEMSWorkbench import execution
 
@@ -55,6 +71,9 @@ def test_run_analysis_fails_when_solver_executable_missing(monkeypatch, tmp_path
 def test_run_analysis_fails_for_openems_binary_in_python_script_mode(monkeypatch, tmp_path):
     from OpenEMSWorkbench import execution
 
+    simulation = _SimulationStub(executable="C:/tools/openEMS.exe")
+    analysis = _AnalysisStub(simulation)
+
     monkeypatch.setattr(
         execution,
         "preflight_gate",
@@ -63,7 +82,7 @@ def test_run_analysis_fails_for_openems_binary_in_python_script_mode(monkeypatch
     monkeypatch.setattr(
         execution,
         "read_analysis_for_export",
-        lambda analysis: {
+        lambda _analysis: {
             "simulation": {
                 "SolverExecutable": "C:/tools/openEMS.exe",
                 "RunBlocking": True,
@@ -72,13 +91,19 @@ def test_run_analysis_fails_for_openems_binary_in_python_script_mode(monkeypatch
         },
     )
 
-    result = execution.run_analysis(object(), tmp_path, "Doc")
+    result = execution.run_analysis(analysis, tmp_path, "Doc")
     assert result.status == "failed"
-    assert "Python interpreter" in result.message
+    assert "openEMS.exe" in result.message
 
 
 def test_run_analysis_succeeds_with_mocked_runner(monkeypatch, tmp_path):
     from OpenEMSWorkbench import execution
+
+    monkeypatch.setattr(
+        execution,
+        "validate_configured_solver_runtime",
+        lambda analysis: (True, "ok"),
+    )
 
     monkeypatch.setattr(
         execution,
@@ -121,6 +146,12 @@ def test_run_analysis_reports_solver_nonzero_exit(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         execution,
+        "validate_configured_solver_runtime",
+        lambda analysis: (True, "ok"),
+    )
+
+    monkeypatch.setattr(
+        execution,
         "preflight_gate",
         lambda analysis: (True, [], {"ok": True, "errors": 0, "warnings": 0, "infos": 0}),
     )
@@ -153,3 +184,32 @@ def test_run_analysis_reports_solver_nonzero_exit(monkeypatch, tmp_path):
     result = execution.run_analysis(object(), tmp_path, "Doc")
     assert result.status == "failed"
     assert result.exit_code == 3
+
+
+def test_auto_configure_solver_runtime_sets_detected_python(monkeypatch):
+    from OpenEMSWorkbench import execution
+
+    simulation = _SimulationStub(executable="")
+    analysis = _AnalysisStub(simulation)
+
+    monkeypatch.setattr(
+        execution,
+        "discover_python_runtime",
+        lambda: type("R", (), {"ok": True, "executable": "C:/Python/python.exe", "message": "Detected Python runtime with openEMS modules: C:/Python/python.exe", "checked": []})(),
+    )
+
+    ok, message = execution.auto_configure_solver_runtime(analysis)
+    assert ok
+    assert "Detected Python runtime" in message
+    assert simulation.SolverExecutable == "C:/Python/python.exe"
+
+
+def test_validate_configured_solver_runtime_rejects_openems_binary():
+    from OpenEMSWorkbench import execution
+
+    simulation = _SimulationStub(executable="C:/tools/openEMS.exe")
+    analysis = _AnalysisStub(simulation)
+
+    ok, message = execution.validate_configured_solver_runtime(analysis)
+    assert not ok
+    assert "openEMS.exe" in message

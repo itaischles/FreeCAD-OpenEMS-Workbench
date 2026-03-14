@@ -117,6 +117,7 @@ ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND = "OpenEMS_AssignSelectedToActiveAnalysis"
 RUN_PREFLIGHT_COMMAND = "OpenEMS_RunPreflight"
 EXPORT_DRY_RUN_COMMAND = "OpenEMS_ExportDryRun"
 RUN_SIMULATION_COMMAND = "OpenEMS_RunSimulation"
+VALIDATE_RUNTIME_COMMAND = "OpenEMS_ValidateRuntime"
 SHOW_HIDE_MESH_OVERLAY_COMMAND = "OpenEMS_ShowHideMeshOverlay"
 REFRESH_MESH_OVERLAY_COMMAND = "OpenEMS_RefreshMeshOverlay"
 
@@ -498,12 +499,31 @@ class _RunSimulationCommand:
         App.Console.PrintMessage("OpenEMS: Running simulation (blocking mode).\n")
         try:
             try:
-                from execution import run_analysis
+                from execution import (
+                    auto_configure_solver_runtime,
+                    run_analysis,
+                    validate_configured_solver_runtime,
+                )
             except ImportError:
-                from OpenEMSWorkbench.execution import run_analysis
+                from OpenEMSWorkbench.execution import (
+                    auto_configure_solver_runtime,
+                    run_analysis,
+                    validate_configured_solver_runtime,
+                )
         except Exception as exc:
             App.Console.PrintError(f"OpenEMS: Failed to load execution module: {exc}\n")
             return
+
+        detected_ok, detected_message = auto_configure_solver_runtime(analysis)
+        if detected_ok and "Detected Python runtime" in detected_message:
+            App.Console.PrintMessage(f"OpenEMS: {detected_message}\n")
+            doc.recompute()
+
+        runtime_ok, runtime_message = validate_configured_solver_runtime(analysis)
+        if not runtime_ok:
+            App.Console.PrintError(f"OpenEMS: Runtime check failed: {runtime_message}\n")
+            return
+        App.Console.PrintMessage(f"OpenEMS: Runtime check passed. {runtime_message}\n")
 
         result = run_analysis(
             analysis,
@@ -573,6 +593,60 @@ class _RefreshMeshOverlayCommand:
 
     def IsActive(self):
         return App is not None and Gui is not None and App.ActiveDocument is not None
+
+
+class _ValidateRuntimeCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Validate Runtime",
+            "ToolTip": "Auto-detect and validate Python runtime for Run Simulation.",
+            "Pixmap": _command_icon(),
+        }
+
+    def Activated(self):
+        if App is None:
+            return
+        doc = App.ActiveDocument
+        if doc is None:
+            App.Console.PrintError("OpenEMS: No active document. Create a document first.\n")
+            return
+
+        analysis = get_active_analysis(doc)
+        if analysis is None:
+            analyses = get_analyses(doc)
+            if len(analyses) == 1:
+                analysis = analyses[0]
+            else:
+                App.Console.PrintError("OpenEMS: No active analysis found.\n")
+                return
+
+        try:
+            try:
+                from execution import auto_configure_solver_runtime, validate_configured_solver_runtime
+            except ImportError:
+                from OpenEMSWorkbench.execution import (
+                    auto_configure_solver_runtime,
+                    validate_configured_solver_runtime,
+                )
+        except Exception as exc:
+            App.Console.PrintError(f"OpenEMS: Failed to load execution module: {exc}\n")
+            return
+
+        auto_ok, auto_message = auto_configure_solver_runtime(analysis)
+        if auto_ok:
+            App.Console.PrintMessage(f"OpenEMS: {auto_message}\n")
+            doc.recompute()
+        else:
+            App.Console.PrintError(f"OpenEMS: Runtime auto-detect failed: {auto_message}\n")
+
+        runtime_ok, runtime_message = validate_configured_solver_runtime(analysis)
+        if runtime_ok:
+            App.Console.PrintMessage(f"OpenEMS: Runtime validation passed: {runtime_message}\n")
+        else:
+            App.Console.PrintError(f"OpenEMS: Runtime validation failed: {runtime_message}\n")
+
+    def IsActive(self):
+        return App is not None and App.ActiveDocument is not None
 
 
 def register_object_commands() -> list[str]:
@@ -647,6 +721,14 @@ def register_object_commands() -> list[str]:
             App.Console.PrintError(f"OpenEMS: Failed to register command '{RUN_SIMULATION_COMMAND}': {exc}\n")
 
     try:
+        if VALIDATE_RUNTIME_COMMAND not in Gui.listCommands():
+            Gui.addCommand(VALIDATE_RUNTIME_COMMAND, _ValidateRuntimeCommand())
+        registered.append(VALIDATE_RUNTIME_COMMAND)
+    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+        if App is not None:
+            App.Console.PrintError(f"OpenEMS: Failed to register command '{VALIDATE_RUNTIME_COMMAND}': {exc}\n")
+
+    try:
         if SHOW_HIDE_MESH_OVERLAY_COMMAND not in Gui.listCommands():
             Gui.addCommand(SHOW_HIDE_MESH_OVERLAY_COMMAND, _ShowHideMeshOverlayCommand())
         registered.append(SHOW_HIDE_MESH_OVERLAY_COMMAND)
@@ -682,6 +764,7 @@ WORKBENCH_OBJECT_COMMANDS = [
     RUN_PREFLIGHT_COMMAND,
     EXPORT_DRY_RUN_COMMAND,
     RUN_SIMULATION_COMMAND,
+    VALIDATE_RUNTIME_COMMAND,
     SHOW_HIDE_MESH_OVERLAY_COMMAND,
     REFRESH_MESH_OVERLAY_COMMAND,
 ]
