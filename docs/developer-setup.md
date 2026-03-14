@@ -44,7 +44,7 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 1. Deploy the workbench.
 2. Start FreeCAD and switch to `OpenEMS` workbench.
 3. Create one object of each type (Simulation, Material, Boundary, Port, Grid, DumpBox).
-4. Select one OpenEMS object and trigger `Edit Selected OpenEMS Object` from the toolbar/menu.
+4. Select one OpenEMS object and trigger `Edit Selected` from the toolbar/menu.
 5. Change one value in the task panel and click `OK`; verify the property updates in the Property editor.
 6. Re-open edit mode and click `Cancel`; verify no additional changes are applied.
 7. Double-click each OpenEMS object in the tree and verify the corresponding task panel opens.
@@ -56,7 +56,7 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 2. Click `Create Analysis` and verify an `openEMS Analysis` object appears.
 3. Create one Simulation, one Grid, one Boundary, at least one Material, and one Port.
 4. Select the Analysis object and run `Set Active Analysis`.
-5. Select all created OpenEMS objects and run `Assign Selected To Active Analysis`.
+5. Select all created OpenEMS objects and run `Assign Selected`.
 6. Select `Run Preflight` and verify report-view output ends with a summary line.
 7. Intentionally break the setup (for example remove the Grid from analysis group or duplicate a port number) and run preflight again.
 8. Verify preflight prints actionable error lines and reports failure when errors are present.
@@ -67,7 +67,7 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 1. Deploy the workbench and open FreeCAD.
 2. Build a valid analysis with simulation/grid/material/boundary/port and run preflight to confirm pass.
 3. Add one simple `Part::Box` object to the analysis group and one non-box/cylinder shape.
-4. Run `Export Dry-Run Script`.
+4. Run `Export Dry Run`.
 5. Verify report view prints export stats and paths for script + STL directory.
 6. Open the generated script and confirm geometry comments include both direct primitive mapping and STL fallback entries.
 7. Run export again without changes and verify output file naming/order remains stable.
@@ -97,4 +97,25 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 8. Run `Run Simulation` and verify report view shows runtime check status, run start, completion/failure, script path, and stdout/stderr log paths.
 9. Open the generated `stdout.log` and `stderr.log` files and verify process output was captured.
 10. Intentionally set `SolverExecutable` to `openEMS.exe` and rerun `Validate Runtime`; verify it reports script-mode mismatch with actionable guidance.
-11. Confirm `Export Dry-Run Script` and mesh overlay commands still behave as expected after run integration.
+11. Confirm `Export Dry Run` and mesh overlay commands still behave as expected after run integration.
+
+## Phase 8 manual verification
+
+1. Deploy the workbench and open FreeCAD.
+2. Switch to `OpenEMS` workbench and verify only one compact OpenEMS toolbar is shown.
+3. Confirm the compact toolbar includes high-frequency actions only (core create actions, preflight/export/run, and mesh toggle).
+4. Open the `OpenEMS` menu and verify grouped sections are present:
+	- Create
+	- Analysis
+	- Run
+	- Runtime
+	- View
+5. Confirm lower-frequency actions such as `Create Boundary`, `Create DumpBox`, `Validate Runtime`, `Configure Runtime...`, and `Refresh Mesh Overlay` remain available through menu sections.
+6. Verify command labels are concise (`Edit Selected`, `Assign Selected`, `Export Dry Run`, `Toggle Mesh Overlay`).
+7. Verify each command shows a distinct icon in toolbar/menu and no missing-icon fallback warnings appear in report view.
+8. Execute a smoke flow:
+	- Create Analysis and Grid
+	- Run Preflight
+	- Run Simulation
+	- Toggle Mesh Overlay
+9. Verify no regressions in behavior from Phase 7 run pipeline and Phase 6 overlay features.

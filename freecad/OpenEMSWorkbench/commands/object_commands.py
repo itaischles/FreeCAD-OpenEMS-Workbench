@@ -90,36 +90,43 @@ COMMAND_DEFINITIONS = {
     "OpenEMS_CreateAnalysis": {
         "menu_text": "Create Analysis",
         "tooltip": "Create an openEMS analysis ownership container.",
+        "icon": "command-create-analysis.svg",
         "factory": create_analysis,
     },
     "OpenEMS_CreateSimulation": {
         "menu_text": "Create Simulation",
         "tooltip": "Create an openEMS simulation container object.",
+        "icon": "command-create-simulation.svg",
         "factory": create_simulation,
     },
     "OpenEMS_CreateMaterial": {
         "menu_text": "Create Material",
         "tooltip": "Create an openEMS material object.",
+        "icon": "command-create-material.svg",
         "factory": create_material,
     },
     "OpenEMS_CreateBoundary": {
         "menu_text": "Create Boundary",
         "tooltip": "Create an openEMS boundary object.",
+        "icon": "command-create-boundary.svg",
         "factory": create_boundary,
     },
     "OpenEMS_CreatePort": {
         "menu_text": "Create Port",
         "tooltip": "Create an openEMS port object.",
+        "icon": "command-create-port.svg",
         "factory": create_port,
     },
     "OpenEMS_CreateGrid": {
         "menu_text": "Create Grid",
         "tooltip": "Create an openEMS FDTD grid object.",
+        "icon": "command-create-grid.svg",
         "factory": create_grid,
     },
     "OpenEMS_CreateDumpBox": {
         "menu_text": "Create DumpBox",
         "tooltip": "Create an openEMS dump box object.",
+        "icon": "command-create-dumpbox.svg",
         "factory": create_dumpbox,
     },
 }
@@ -135,10 +142,88 @@ CONFIGURE_RUNTIME_COMMAND = "OpenEMS_ConfigureRuntime"
 SHOW_HIDE_MESH_OVERLAY_COMMAND = "OpenEMS_ShowHideMeshOverlay"
 REFRESH_MESH_OVERLAY_COMMAND = "OpenEMS_RefreshMeshOverlay"
 
+COMMAND_ICON_FILES = {
+    EDIT_COMMAND_NAME: "command-edit-selected.svg",
+    SET_ACTIVE_ANALYSIS_COMMAND: "command-set-active-analysis.svg",
+    ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND: "command-assign-selected.svg",
+    RUN_PREFLIGHT_COMMAND: "command-run-preflight.svg",
+    EXPORT_DRY_RUN_COMMAND: "command-export-dry-run.svg",
+    RUN_SIMULATION_COMMAND: "command-run-simulation.svg",
+    VALIDATE_RUNTIME_COMMAND: "command-validate-runtime.svg",
+    CONFIGURE_RUNTIME_COMMAND: "command-configure-runtime.svg",
+    SHOW_HIDE_MESH_OVERLAY_COMMAND: "command-toggle-mesh.svg",
+    REFRESH_MESH_OVERLAY_COMMAND: "command-refresh-mesh.svg",
+}
 
-def _command_icon() -> str:
+CREATE_COMMANDS = list(COMMAND_DEFINITIONS.keys())
+ANALYSIS_COMMANDS = [
+    SET_ACTIVE_ANALYSIS_COMMAND,
+    ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND,
+    EDIT_COMMAND_NAME,
+]
+RUN_COMMANDS = [
+    RUN_PREFLIGHT_COMMAND,
+    EXPORT_DRY_RUN_COMMAND,
+    RUN_SIMULATION_COMMAND,
+]
+RUNTIME_COMMANDS = [
+    VALIDATE_RUNTIME_COMMAND,
+    CONFIGURE_RUNTIME_COMMAND,
+]
+VIEW_COMMANDS = [
+    SHOW_HIDE_MESH_OVERLAY_COMMAND,
+    REFRESH_MESH_OVERLAY_COMMAND,
+]
+
+WORKBENCH_TOOLBAR_COMMANDS = [
+    "OpenEMS_CreateAnalysis",
+    "OpenEMS_CreateSimulation",
+    "OpenEMS_CreateMaterial",
+    "OpenEMS_CreatePort",
+    "OpenEMS_CreateGrid",
+    RUN_PREFLIGHT_COMMAND,
+    EXPORT_DRY_RUN_COMMAND,
+    RUN_SIMULATION_COMMAND,
+    SHOW_HIDE_MESH_OVERLAY_COMMAND,
+]
+
+WORKBENCH_MENU_GROUPS = [
+    ("Create", CREATE_COMMANDS),
+    ("Analysis", ANALYSIS_COMMANDS),
+    ("Run", RUN_COMMANDS),
+    ("Runtime", RUNTIME_COMMANDS),
+    ("View", VIEW_COMMANDS),
+]
+
+WORKBENCH_OBJECT_COMMANDS = (
+    CREATE_COMMANDS
+    + ANALYSIS_COMMANDS
+    + RUN_COMMANDS
+    + RUNTIME_COMMANDS
+    + VIEW_COMMANDS
+)
+
+
+def _command_icon(command_name: str | None = None) -> str:
     if App is None:
         return ""
+    icon_name = "OpenEMSWorkbench.svg"
+    if command_name in COMMAND_DEFINITIONS:
+        icon_name = COMMAND_DEFINITIONS[command_name].get("icon", icon_name)
+    elif command_name in COMMAND_ICON_FILES:
+        icon_name = COMMAND_ICON_FILES[command_name]
+
+    candidate = os.path.join(
+        App.getUserAppDataDir(),
+        "Mod",
+        "OpenEMSWorkbench",
+        "resources",
+        "icons",
+        icon_name,
+    )
+    if os.path.isfile(candidate):
+        return candidate
+
     return os.path.join(
         App.getUserAppDataDir(),
         "Mod",
@@ -206,7 +291,7 @@ class _CreateObjectCommand:
         return {
             "MenuText": data["menu_text"],
             "ToolTip": data["tooltip"],
-            "Pixmap": _command_icon(),
+            "Pixmap": _command_icon(self.command_name),
         }
 
     def Activated(self):
@@ -232,9 +317,9 @@ class _CreateObjectCommand:
 class _EditSelectedObjectCommand:
     def GetResources(self):
         return {
-            "MenuText": "Edit Selected OpenEMS Object",
+            "MenuText": "Edit Selected",
             "ToolTip": "Open the task panel for the selected OpenEMS object.",
-            "Pixmap": _command_icon(),
+            "Pixmap": _command_icon(EDIT_COMMAND_NAME),
         }
 
     def Activated(self):
@@ -295,7 +380,7 @@ class _SetActiveAnalysisCommand:
         return {
             "MenuText": "Set Active Analysis",
             "ToolTip": "Set selected OpenEMS Analysis as active.",
-            "Pixmap": _command_icon(),
+            "Pixmap": _command_icon(SET_ACTIVE_ANALYSIS_COMMAND),
         }
 
     def Activated(self):
@@ -326,9 +411,9 @@ class _SetActiveAnalysisCommand:
 class _AssignSelectedToActiveAnalysisCommand:
     def GetResources(self):
         return {
-            "MenuText": "Assign Selected To Active Analysis",
+            "MenuText": "Assign Selected",
             "ToolTip": "Add selected OpenEMS objects to the active analysis group.",
-            "Pixmap": _command_icon(),
+            "Pixmap": _command_icon(ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND),
         }
 
     def Activated(self):
@@ -366,7 +451,7 @@ class _RunPreflightCommand:
         return {
             "MenuText": "Run Preflight",
             "ToolTip": "Run OpenEMS analysis preflight validation checks.",
-            "Pixmap": _command_icon(),
+            "Pixmap": _command_icon(RUN_PREFLIGHT_COMMAND),
         }
 
     def Activated(self):
@@ -403,9 +488,9 @@ class _RunPreflightCommand:
 class _ExportDryRunCommand:
     def GetResources(self):
         return {
-            "MenuText": "Export Dry-Run Script",
+            "MenuText": "Export Dry Run",
             "ToolTip": "Run preflight and generate openEMS script plus geometry artifacts.",
-            "Pixmap": _command_icon(),
+            "Pixmap": _command_icon(EXPORT_DRY_RUN_COMMAND),
         }
 
     def Activated(self):
@@ -460,9 +545,9 @@ class _ExportDryRunCommand:
 class _ShowHideMeshOverlayCommand:
     def GetResources(self):
         return {
-            "MenuText": "Show/Hide Mesh Overlay",
+            "MenuText": "Toggle Mesh Overlay",
             "ToolTip": "Toggle viewport mesh overlay generated from active analysis grid.",
-            "Pixmap": _command_icon(),
+            "Pixmap": _command_icon(SHOW_HIDE_MESH_OVERLAY_COMMAND),
             "Checkable": True,
         }
 
@@ -502,7 +587,7 @@ class _RunSimulationCommand:
         return {
             "MenuText": "Run Simulation",
             "ToolTip": "Run preflight, export run-ready script, and execute solver.",
-            "Pixmap": _command_icon(),
+            "Pixmap": _command_icon(RUN_SIMULATION_COMMAND),
         }
 
     def Activated(self):
@@ -611,7 +696,7 @@ class _RefreshMeshOverlayCommand:
         return {
             "MenuText": "Refresh Mesh Overlay",
             "ToolTip": "Regenerate and refresh viewport mesh overlay from active analysis grid.",
-            "Pixmap": _command_icon(),
+            "Pixmap": _command_icon(REFRESH_MESH_OVERLAY_COMMAND),
         }
 
     def Activated(self):
@@ -641,7 +726,7 @@ class _ValidateRuntimeCommand:
         return {
             "MenuText": "Validate Runtime",
             "ToolTip": "Auto-detect and validate Python runtime for Run Simulation.",
-            "Pixmap": _command_icon(),
+            "Pixmap": _command_icon(VALIDATE_RUNTIME_COMMAND),
         }
 
     def Activated(self):
@@ -691,7 +776,7 @@ class _ConfigureRuntimeCommand:
         return {
             "MenuText": "Configure Runtime...",
             "ToolTip": "Set and save a default Python runtime for OpenEMS simulations.",
-            "Pixmap": _command_icon(),
+            "Pixmap": _command_icon(CONFIGURE_RUNTIME_COMMAND),
         }
 
     def Activated(self):
@@ -853,24 +938,3 @@ def register_object_commands() -> list[str]:
                 f"OpenEMS: Failed to register command '{REFRESH_MESH_OVERLAY_COMMAND}': {exc}\n"
             )
     return registered
-
-
-WORKBENCH_OBJECT_COMMANDS = [
-    "OpenEMS_CreateAnalysis",
-    "OpenEMS_CreateSimulation",
-    "OpenEMS_CreateMaterial",
-    "OpenEMS_CreateBoundary",
-    "OpenEMS_CreatePort",
-    "OpenEMS_CreateGrid",
-    "OpenEMS_CreateDumpBox",
-    SET_ACTIVE_ANALYSIS_COMMAND,
-    ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND,
-    EDIT_COMMAND_NAME,
-    RUN_PREFLIGHT_COMMAND,
-    EXPORT_DRY_RUN_COMMAND,
-    RUN_SIMULATION_COMMAND,
-    VALIDATE_RUNTIME_COMMAND,
-    CONFIGURE_RUNTIME_COMMAND,
-    SHOW_HIDE_MESH_OVERLAY_COMMAND,
-    REFRESH_MESH_OVERLAY_COMMAND,
-]
