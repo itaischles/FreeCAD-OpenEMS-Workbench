@@ -3,9 +3,6 @@ import os
 import FreeCAD as App
 import FreeCADGui as Gui
 
-BUILD_TAG = "phase1-fix-20260313-01"
-
-
 class OpenEMSWorkbench(Gui.Workbench):
     def __init__(self):
         super().__init__()
@@ -24,18 +21,18 @@ class OpenEMSWorkbench(Gui.Workbench):
         try:
             try:
                 from commands.workbench_commands import (
-                    COMMAND_NAME,
+                    WORKBENCH_COMMANDS,
                     register_commands,
                 )
             except ImportError:
                 from OpenEMSWorkbench.commands.workbench_commands import (
-                    COMMAND_NAME,
+                    WORKBENCH_COMMANDS,
                     register_commands,
                 )
 
             register_commands()
-            self.appendToolbar("OpenEMS", [COMMAND_NAME])
-            self.appendMenu("OpenEMS", [COMMAND_NAME])
+            self.appendToolbar("OpenEMS", WORKBENCH_COMMANDS)
+            self.appendMenu("OpenEMS", WORKBENCH_COMMANDS)
             App.Console.PrintMessage("OpenEMS workbench initialized.\n")
         except Exception as exc:  # pragma: no cover - only exercised in FreeCAD GUI
             App.Console.PrintError(f"OpenEMS initialization failed: {exc}\n")
@@ -45,4 +42,3 @@ class OpenEMSWorkbench(Gui.Workbench):
 
 
 Gui.addWorkbench(OpenEMSWorkbench())
-App.Console.PrintMessage(f"OpenEMS InitGui loaded ({BUILD_TAG}).\n")
