@@ -16,6 +16,13 @@ class ProcessRunResult:
     stderr_log: str
 
 
+def _normalize_exit_code(code: int) -> int:
+    # Windows may surface negative process exits as unsigned 32-bit values.
+    if code > 0x7FFFFFFF:
+        return code - 0x100000000
+    return code
+
+
 def run_process_blocking(
     command: list[str],
     cwd: str | Path,
@@ -49,7 +56,7 @@ def run_process_blocking(
     stderr_path.write_text(completed.stderr or "", encoding="utf-8")
 
     return ProcessRunResult(
-        exit_code=int(completed.returncode),
+        exit_code=_normalize_exit_code(int(completed.returncode)),
         command=list(command),
         cwd=str(cwd_path),
         duration_seconds=duration,

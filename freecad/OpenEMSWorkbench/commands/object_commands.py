@@ -144,6 +144,19 @@ def _resolve_mesh(doc):
         return None, None, f"Unexpected mesh resolution error: {exc}"
 
 
+def _read_log_tail(path: str, max_lines: int = 3) -> str:
+    try:
+        if not path or not os.path.isfile(path):
+            return ""
+        text = open(path, "r", encoding="utf-8", errors="replace").read().strip()
+        if not text:
+            return ""
+        lines = text.splitlines()
+        return " | ".join(lines[-max_lines:])
+    except Exception:
+        return ""
+
+
 def _preflight_gate(analysis):
     findings = run_preflight(analysis)
     summary = summarize_findings(findings)
@@ -518,6 +531,10 @@ class _RunSimulationCommand:
                 App.Console.PrintMessage(f"OpenEMS: Stdout log {result.paths['stdout_log']}\n")
             if "stderr_log" in result.paths:
                 App.Console.PrintMessage(f"OpenEMS: Stderr log {result.paths['stderr_log']}\n")
+                if result.status == "failed":
+                    tail = _read_log_tail(result.paths["stderr_log"])
+                    if tail:
+                        App.Console.PrintError(f"OpenEMS: Stderr tail: {tail}\n")
 
         if result.duration_seconds is not None:
             App.Console.PrintMessage(

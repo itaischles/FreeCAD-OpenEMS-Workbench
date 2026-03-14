@@ -52,6 +52,31 @@ def test_run_analysis_fails_when_solver_executable_missing(monkeypatch, tmp_path
     assert "SolverExecutable" in result.message
 
 
+def test_run_analysis_fails_for_openems_binary_in_python_script_mode(monkeypatch, tmp_path):
+    from OpenEMSWorkbench import execution
+
+    monkeypatch.setattr(
+        execution,
+        "preflight_gate",
+        lambda analysis: (True, [], {"ok": True, "errors": 0, "warnings": 0, "infos": 0}),
+    )
+    monkeypatch.setattr(
+        execution,
+        "read_analysis_for_export",
+        lambda analysis: {
+            "simulation": {
+                "SolverExecutable": "C:/tools/openEMS.exe",
+                "RunBlocking": True,
+                "OutputDirectory": "",
+            }
+        },
+    )
+
+    result = execution.run_analysis(object(), tmp_path, "Doc")
+    assert result.status == "failed"
+    assert "Python interpreter" in result.message
+
+
 def test_run_analysis_succeeds_with_mocked_runner(monkeypatch, tmp_path):
     from OpenEMSWorkbench import execution
 

@@ -87,7 +87,7 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 
 1. Deploy the workbench and open FreeCAD.
 2. Create a valid analysis containing Simulation, Grid, Material, Boundary, and Port objects.
-3. Open Simulation task panel and set `SolverExecutable` to a valid executable path for your openEMS runtime.
+3. Open Simulation task panel and set `SolverExecutable` to a Python interpreter path where `openEMS` and `CSXCAD` Python modules are available (do not use `openEMS.exe` in current Phase 7 mode).
 4. Optionally set `SolverArguments` and confirm `RunBlocking` is enabled.
 5. Run `Run Preflight` and verify warnings/errors are understandable.
 6. Run `Run Simulation` and verify report view shows run start, completion/failure, script path, and stdout/stderr log paths.

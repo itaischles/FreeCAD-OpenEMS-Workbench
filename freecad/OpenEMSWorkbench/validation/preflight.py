@@ -177,6 +177,17 @@ def _check_solver_configuration(members) -> list[PreflightFinding]:
                 sim,
             )
         )
+    else:
+        name = os.path.basename(executable).lower()
+        if name in {"openems", "openems.exe"}:
+            findings.append(
+                _finding(
+                    "warning",
+                    "simulation.solver_executable_script_mode",
+                    "Phase 7 Run Simulation executes Python scripts. Use a Python interpreter with openEMS modules instead of openEMS.exe.",
+                    sim,
+                )
+            )
     return findings
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import os
 import shlex
 
 try:
@@ -50,6 +51,11 @@ def _parse_arguments(arguments: str) -> list[str]:
 	return shlex.split(text, posix=False)
 
 
+def _looks_like_openems_binary(executable: str) -> bool:
+	name = os.path.basename(executable).lower().strip()
+	return name in {"openems", "openems.exe"}
+
+
 def run_analysis(
 	analysis,
 	base_output_dir: str | Path,
@@ -83,6 +89,18 @@ def run_analysis(
 		return ExecutionResult(
 			status="failed",
 			message="Simulation SolverExecutable is empty.",
+			preflight_summary=summary,
+			findings=findings,
+		)
+
+	if _looks_like_openems_binary(solver_executable):
+		return ExecutionResult(
+			status="failed",
+			message=(
+				"SolverExecutable points to openEMS.exe, but Phase 7 Run Simulation "
+				"executes the generated Python script. Set SolverExecutable to a Python "
+				"interpreter that has openEMS/CSXCAD Python modules installed."
+			),
 			preflight_summary=summary,
 			findings=findings,
 		)

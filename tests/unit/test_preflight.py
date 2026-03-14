@@ -75,3 +75,13 @@ def test_preflight_warns_when_solver_executable_missing():
     analysis = _minimal_valid_analysis()
     findings = run_preflight(analysis)
     assert any(f.check_id == "simulation.solver_executable_configured" for f in findings)
+
+
+def test_preflight_warns_for_openems_exe_in_script_mode():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    simulation = analysis.Group[0]
+    simulation.SolverExecutable = "C:/tools/openEMS.exe"
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "simulation.solver_executable_script_mode" for f in findings)
