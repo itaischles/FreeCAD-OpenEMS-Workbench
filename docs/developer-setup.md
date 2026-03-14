@@ -87,13 +87,14 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 
 1. Deploy the workbench and open FreeCAD.
 2. Create a valid analysis containing Simulation, Grid, Material, Boundary, and Port objects.
-3. Run `Configure Runtime...` once and select a Python interpreter that has `openEMS` and `CSXCAD` Python modules.
-4. Open Simulation task panel and confirm `RunBlocking` is enabled.
-5. Run `Validate Runtime` and verify either:
+3. Ensure `OPENEMS_INSTALL_DIR` points to your openEMS installation root (example `C:\openEMS`) so DLLs can be loaded.
+4. Run `Configure Runtime...` once and select a Python interpreter that has `openEMS` and `CSXCAD` Python modules.
+5. Open Simulation task panel and confirm `RunBlocking` is enabled.
+6. Run `Validate Runtime` and verify either:
 	- auto-detection finds a compatible Python runtime and reports success, or
 	- a clear failure message explains why runtime discovery failed.
-6. Run `Run Preflight` and verify warnings/errors are understandable.
-7. Run `Run Simulation` and verify report view shows runtime check status, run start, completion/failure, script path, and stdout/stderr log paths.
-8. Open the generated `stdout.log` and `stderr.log` files and verify process output was captured.
-9. Intentionally set `SolverExecutable` to `openEMS.exe` and rerun `Validate Runtime`; verify it reports script-mode mismatch with actionable guidance.
-10. Confirm `Export Dry-Run Script` and mesh overlay commands still behave as expected after run integration.
+7. Run `Run Preflight` and verify warnings/errors are understandable.
+8. Run `Run Simulation` and verify report view shows runtime check status, run start, completion/failure, script path, and stdout/stderr log paths.
+9. Open the generated `stdout.log` and `stderr.log` files and verify process output was captured.
+10. Intentionally set `SolverExecutable` to `openEMS.exe` and rerun `Validate Runtime`; verify it reports script-mode mismatch with actionable guidance.
+11. Confirm `Export Dry-Run Script` and mesh overlay commands still behave as expected after run integration.

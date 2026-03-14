@@ -8,7 +8,13 @@ import subprocess
 import sys
 
 
-_CHECK_SNIPPET = "import openEMS, CSXCAD; print('OPENEMS_PYTHON_RUNTIME_OK')"
+_CHECK_SNIPPET = (
+    "import os; "
+    "root=os.environ.get('OPENEMS_INSTALL_DIR','').strip(); "
+    "(os.add_dll_directory(root) if (root and hasattr(os,'add_dll_directory')) else None); "
+    "import openEMS, CSXCAD; "
+    "print('OPENEMS_PYTHON_RUNTIME_OK')"
+)
 
 
 @dataclass
