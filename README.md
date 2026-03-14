@@ -18,4 +18,6 @@ Phase 1 establishes the external workbench scaffold, FreeCAD entrypoints, a plac
 
 Git usage conventions for this repository are documented in `docs/git-workflow.md`.
 
+End-user OpenEMS install and FreeCAD linkage steps are documented in `docs/user-openems-setup.md`.
+
 The local virtual environment helper in `SetupBasicPythonEnv.bat` is optional and not part of the workbench runtime contract.
