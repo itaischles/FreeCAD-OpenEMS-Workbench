@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 try:
-    from model import COORDINATE_SYSTEMS, DEFAULTS
+    from model import COORDINATE_SYSTEMS, DEFAULTS, EXCITATION_TYPES
     from objects.base_feature import (
         FeatureProxyBase,
         ViewProviderBase,
@@ -9,7 +9,7 @@ try:
         set_enum_choices,
     )
 except ImportError:
-    from OpenEMSWorkbench.model import COORDINATE_SYSTEMS, DEFAULTS
+    from OpenEMSWorkbench.model import COORDINATE_SYSTEMS, DEFAULTS, EXCITATION_TYPES
     from OpenEMSWorkbench.objects.base_feature import (
         FeatureProxyBase,
         ViewProviderBase,
@@ -64,6 +64,30 @@ class OpenEMSSimulationProxy(FeatureProxyBase):
         )
         add_property_if_missing(
             obj,
+            "App::PropertyEnumeration",
+            "ExcitationType",
+            "OpenEMS",
+            "Excitation waveform type.",
+            DEFAULTS["simulation"]["excitation_type"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyFloat",
+            "ExcitationF0",
+            "OpenEMS",
+            "Excitation center frequency in Hz.",
+            DEFAULTS["simulation"]["excitation_f0"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyFloat",
+            "ExcitationFc",
+            "OpenEMS",
+            "Excitation bandwidth in Hz.",
+            DEFAULTS["simulation"]["excitation_fc"],
+        )
+        add_property_if_missing(
+            obj,
             "App::PropertyString",
             "OutputDirectory",
             "OpenEMS",
@@ -99,6 +123,12 @@ class OpenEMSSimulationProxy(FeatureProxyBase):
             "CoordinateSystem",
             COORDINATE_SYSTEMS,
             DEFAULTS["simulation"]["coordinate_system"],
+        )
+        set_enum_choices(
+            obj,
+            "ExcitationType",
+            EXCITATION_TYPES,
+            DEFAULTS["simulation"]["excitation_type"],
         )
 
 

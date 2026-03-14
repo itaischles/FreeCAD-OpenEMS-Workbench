@@ -232,3 +232,101 @@ def test_validate_configured_solver_runtime_rejects_openems_binary():
     ok, message = execution.validate_configured_solver_runtime(analysis)
     assert not ok
     assert "openEMS.exe" in message
+
+
+def test_run_analysis_adds_unbuffered_flag_for_python(monkeypatch, tmp_path):
+    from OpenEMSWorkbench import execution
+
+    seen: dict = {}
+
+    monkeypatch.setattr(
+        execution,
+        "validate_configured_solver_runtime",
+        lambda analysis: (True, "ok"),
+    )
+    monkeypatch.setattr(
+        execution,
+        "preflight_gate",
+        lambda analysis: (True, [], {"ok": True, "errors": 0, "warnings": 0, "infos": 0}),
+    )
+    monkeypatch.setattr(
+        execution,
+        "read_analysis_for_export",
+        lambda analysis: {
+            "simulation": {
+                "SolverExecutable": "python.exe",
+                "SolverArguments": "",
+                "RunBlocking": True,
+                "OutputDirectory": "",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        execution,
+        "export_analysis_run_ready",
+        lambda analysis, base_output_dir, document_name, run_output_dir=None: {
+            "paths": {
+                "root": str(tmp_path / "root"),
+                "script": str(tmp_path / "root" / "openems_export.py"),
+                "stdout_log": str(tmp_path / "root" / "logs" / "stdout.log"),
+                "stderr_log": str(tmp_path / "root" / "logs" / "stderr.log"),
+            }
+        },
+    )
+
+    def _runner(**kwargs):
+        seen.update(kwargs)
+        return _ProcessResultStub(exit_code=0)
+
+    monkeypatch.setattr(execution, "run_process_blocking", _runner)
+    monkeypatch.setattr(execution, "_detect_solver_setup_failure", lambda *_: "")
+
+    result = execution.run_analysis(object(), tmp_path, "Doc")
+    assert result.status == "succeeded"
+    assert "-u" in seen["command"]
+    assert seen["env"]["PYTHONUNBUFFERED"] == "1"
+
+
+def test_run_analysis_fails_when_logs_report_setup_failure(monkeypatch, tmp_path):
+    from OpenEMSWorkbench import execution
+
+    monkeypatch.setattr(
+        execution,
+        "validate_configured_solver_runtime",
+        lambda analysis: (True, "ok"),
+    )
+    monkeypatch.setattr(
+        execution,
+        "preflight_gate",
+        lambda analysis: (True, [], {"ok": True, "errors": 0, "warnings": 0, "infos": 0}),
+    )
+    monkeypatch.setattr(
+        execution,
+        "read_analysis_for_export",
+        lambda analysis: {
+            "simulation": {
+                "SolverExecutable": "solver.exe",
+                "SolverArguments": "",
+                "RunBlocking": True,
+                "OutputDirectory": "",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        execution,
+        "export_analysis_run_ready",
+        lambda analysis, base_output_dir, document_name, run_output_dir=None: {
+            "paths": {
+                "root": str(tmp_path / "root"),
+                "script": str(tmp_path / "root" / "openems_export.py"),
+                "stdout_log": str(tmp_path / "root" / "logs" / "stdout.log"),
+                "stderr_log": str(tmp_path / "root" / "logs" / "stderr.log"),
+            }
+        },
+    )
+    monkeypatch.setattr(execution, "run_process_blocking", lambda **kwargs: _ProcessResultStub(exit_code=0))
+    monkeypatch.setattr(execution, "_detect_solver_setup_failure", lambda *_: "setup failed")
+
+    result = execution.run_analysis(object(), tmp_path, "Doc")
+    assert result.status == "failed"
+    assert "setup/runtime failure" in result.message

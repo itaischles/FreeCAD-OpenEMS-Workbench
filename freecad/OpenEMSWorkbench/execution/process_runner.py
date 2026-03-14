@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from queue import Empty, Queue
 import subprocess
 import threading
 import time
@@ -60,39 +61,59 @@ def run_process_blocking(
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
 
-    def _consume(pipe, collector: list[str], callback):
+    callback_queue: Queue[tuple] = Queue()
+
+    def _consume(pipe, collector: list[str], callback, stream):
         if pipe is None:
             return
         for line in iter(pipe.readline, ""):
             collector.append(line)
+            stream.write(line)
+            stream.flush()
             if callback is not None:
-                try:
-                    callback(line.rstrip("\r\n"))
-                except Exception:
-                    pass
+                callback_queue.put((callback, line.rstrip("\r\n")))
         pipe.close()
 
     started = time.perf_counter()
-    stdout_thread = threading.Thread(
-        target=_consume,
-        args=(process.stdout, stdout_lines, on_stdout_line),
-        daemon=True,
-    )
-    stderr_thread = threading.Thread(
-        target=_consume,
-        args=(process.stderr, stderr_lines, on_stderr_line),
-        daemon=True,
-    )
-    stdout_thread.start()
-    stderr_thread.start()
+    with stdout_path.open("w", encoding="utf-8") as stdout_stream, stderr_path.open(
+        "w", encoding="utf-8"
+    ) as stderr_stream:
+        stdout_thread = threading.Thread(
+            target=_consume,
+            args=(process.stdout, stdout_lines, on_stdout_line, stdout_stream),
+            daemon=True,
+        )
+        stderr_thread = threading.Thread(
+            target=_consume,
+            args=(process.stderr, stderr_lines, on_stderr_line, stderr_stream),
+            daemon=True,
+        )
+        stdout_thread.start()
+        stderr_thread.start()
 
-    exit_code = process.wait()
-    stdout_thread.join()
-    stderr_thread.join()
+        while True:
+            try:
+                callback, payload = callback_queue.get(timeout=0.02)
+                try:
+                    callback(payload)
+                except Exception:
+                    pass
+            except Empty:
+                pass
+
+            if (
+                process.poll() is not None
+                and not stdout_thread.is_alive()
+                and not stderr_thread.is_alive()
+                and callback_queue.empty()
+            ):
+                break
+
+        exit_code = process.wait()
+        stdout_thread.join()
+        stderr_thread.join()
+
     duration = time.perf_counter() - started
-
-    stdout_path.write_text("".join(stdout_lines), encoding="utf-8")
-    stderr_path.write_text("".join(stderr_lines), encoding="utf-8")
 
     return ProcessRunResult(
         exit_code=_normalize_exit_code(int(exit_code)),

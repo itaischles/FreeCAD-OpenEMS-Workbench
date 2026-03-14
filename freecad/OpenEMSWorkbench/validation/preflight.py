@@ -62,6 +62,14 @@ def _check_required_counts(members) -> list[PreflightFinding]:
                 f"Analysis must contain exactly one Boundary object, found {len(members.boundaries)}.",
             )
         )
+    if len(members.ports) < 1:
+        findings.append(
+            _finding(
+                "error",
+                "required.port_count",
+                "Analysis must contain at least one Port object.",
+            )
+        )
 
     return findings
 
@@ -191,6 +199,155 @@ def _check_solver_configuration(members) -> list[PreflightFinding]:
     return findings
 
 
+def _check_excitation(members) -> list[PreflightFinding]:
+    findings: list[PreflightFinding] = []
+    if not members.simulations:
+        return findings
+
+    sim = members.simulations[0]
+    excitation_type = str(getattr(sim, "ExcitationType", "Gaussian")).strip()
+    if excitation_type != "Gaussian":
+        findings.append(
+            _finding(
+                "error",
+                "simulation.excitation_type_supported",
+                f"Excitation type '{excitation_type}' is not supported in Phase 9 MVP. Use Gaussian.",
+                sim,
+            )
+        )
+
+    try:
+        f0 = float(getattr(sim, "ExcitationF0", 0.0))
+    except Exception:
+        f0 = 0.0
+    try:
+        fc = float(getattr(sim, "ExcitationFc", 0.0))
+    except Exception:
+        fc = 0.0
+
+    if f0 <= 0.0:
+        findings.append(
+            _finding(
+                "error",
+                "simulation.excitation_f0_positive",
+                "ExcitationF0 must be greater than 0 Hz.",
+                sim,
+            )
+        )
+    if fc <= 0.0:
+        findings.append(
+            _finding(
+                "error",
+                "simulation.excitation_fc_positive",
+                "ExcitationFc must be greater than 0 Hz.",
+                sim,
+            )
+        )
+
+    return findings
+
+
+def _check_port_configuration(members) -> list[PreflightFinding]:
+    findings: list[PreflightFinding] = []
+    valid_directions = {"x", "y", "z", "+x", "-x", "+y", "-y", "+z", "-z"}
+    axis_index = {"x": 0, "y": 1, "z": 2}
+    excited_count = 0
+
+    for port in members.ports:
+        port_type = str(getattr(port, "PortType", "Lumped")).strip()
+        if port_type != "Lumped":
+            findings.append(
+                _finding(
+                    "error",
+                    "port.type_supported",
+                    f"Port type '{port_type}' is not supported in Phase 9 MVP. Use Lumped.",
+                    port,
+                )
+            )
+
+        try:
+            resistance = float(getattr(port, "Resistance", 0.0))
+        except Exception:
+            resistance = 0.0
+        if resistance <= 0.0:
+            findings.append(
+                _finding(
+                    "error",
+                    "port.resistance_positive",
+                    "Port resistance must be greater than 0 Ohm.",
+                    port,
+                )
+            )
+
+        direction = str(getattr(port, "PropagationDirection", "+z")).strip().lower()
+        if direction not in valid_directions:
+            findings.append(
+                _finding(
+                    "error",
+                    "port.direction_valid",
+                    "PropagationDirection must be one of +x, -x, +y, -y, +z, -z.",
+                    port,
+                )
+            )
+            direction_axis = "z"
+        else:
+            direction_axis = direction[-1]
+
+        try:
+            sx = float(getattr(port, "PortStartX", 0.0))
+            sy = float(getattr(port, "PortStartY", 0.0))
+            sz = float(getattr(port, "PortStartZ", 0.0))
+            ex = float(getattr(port, "PortStopX", 0.0))
+            ey = float(getattr(port, "PortStopY", 0.0))
+            ez = float(getattr(port, "PortStopZ", 0.0))
+        except Exception:
+            findings.append(
+                _finding(
+                    "error",
+                    "port.region_numeric",
+                    "Port start/stop coordinates must be numeric values.",
+                    port,
+                )
+            )
+            continue
+
+        start = [sx, sy, sz]
+        stop = [ex, ey, ez]
+        if sx == ex and sy == ey and sz == ez:
+            findings.append(
+                _finding(
+                    "error",
+                    "port.region_non_degenerate",
+                    "Port start and stop coordinates must define a non-degenerate region.",
+                    port,
+                )
+            )
+
+        if start[axis_index[direction_axis]] == stop[axis_index[direction_axis]]:
+            findings.append(
+                _finding(
+                    "error",
+                    "port.region_excitation_axis_span",
+                    f"Port start/stop must differ along excitation direction '{direction_axis}'.",
+                    port,
+                )
+            )
+
+        if bool(getattr(port, "Excite", False)):
+            excited_count += 1
+
+    if members.ports and excited_count != 1:
+        findings.append(
+            _finding(
+                "error",
+                "port.single_excitation_source",
+                f"Exactly one excited port is required for Phase 9 MVP, found {excited_count}.",
+            )
+        )
+
+    return findings
+
+
 def run_preflight(analysis: Any) -> list[PreflightFinding]:
     if analysis is None:
         return [
@@ -209,6 +366,8 @@ def run_preflight(analysis: Any) -> list[PreflightFinding]:
     findings.extend(_check_dumpbox_frequency(members))
     findings.extend(_check_output_directory(members))
     findings.extend(_check_solver_configuration(members))
+    findings.extend(_check_excitation(members))
+    findings.extend(_check_port_configuration(members))
 
     for unknown in members.unknown:
         findings.append(

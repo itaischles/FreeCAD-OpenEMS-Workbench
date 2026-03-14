@@ -74,6 +74,34 @@ def _looks_like_openems_binary(executable: str) -> bool:
 	return name in {"openems", "openems.exe"}
 
 
+def _looks_like_python_runtime(executable: str) -> bool:
+	name = os.path.basename(executable).lower().strip()
+	return name.startswith("python")
+
+
+def _read_text(path: str) -> str:
+	try:
+		if not path or not os.path.isfile(path):
+			return ""
+		return Path(path).read_text(encoding="utf-8", errors="replace")
+	except Exception:
+		return ""
+
+
+def _detect_solver_setup_failure(stdout_log: str, stderr_log: str) -> str:
+	blob = (_read_text(stdout_log) + "\n" + _read_text(stderr_log)).lower()
+	patterns = [
+		"setup failed",
+		"error code:",
+		"cartoperator::setupcsxgrid",
+		"fatal error",
+	]
+	for token in patterns:
+		if token in blob:
+			return token
+	return ""
+
+
 def _primary_simulation(analysis):
 	members = collect_members(analysis)
 	return members.simulations[0] if members.simulations else None
@@ -198,7 +226,16 @@ def run_analysis(
 	stderr_log = str(paths.get("stderr_log", ""))
 	cwd = str(paths.get("root", ""))
 
-	command = [solver_executable, *_parse_arguments(solver_arguments), script_path]
+	command = [solver_executable]
+	if _looks_like_python_runtime(solver_executable):
+		command.append("-u")
+	command.extend(_parse_arguments(solver_arguments))
+	command.append(script_path)
+
+	run_env = dict(os.environ)
+	if _looks_like_python_runtime(solver_executable):
+		run_env["PYTHONUNBUFFERED"] = "1"
+		run_env.setdefault("PYTHONIOENCODING", "utf-8")
 
 	try:
 		proc_result = run_process_blocking(
@@ -206,6 +243,7 @@ def run_analysis(
 			cwd=cwd,
 			stdout_log=stdout_log,
 			stderr_log=stderr_log,
+			env=run_env,
 			on_stdout_line=on_stdout_line,
 			on_stderr_line=on_stderr_line,
 		)
@@ -223,6 +261,22 @@ def run_analysis(
 		return ExecutionResult(
 			status="failed",
 			message="Solver process exited with non-zero status.",
+			exit_code=proc_result.exit_code,
+			duration_seconds=proc_result.duration_seconds,
+			command=proc_result.command,
+			paths={k: str(v) for k, v in paths.items()},
+			preflight_summary=summary,
+			findings=findings,
+		)
+
+	failure_token = _detect_solver_setup_failure(proc_result.stdout_log, proc_result.stderr_log)
+	if failure_token:
+		return ExecutionResult(
+			status="failed",
+			message=(
+				"Solver reported a setup/runtime failure in logs "
+				f"(detected token: '{failure_token}')."
+			),
 			exit_code=proc_result.exit_code,
 			duration_seconds=proc_result.duration_seconds,
 			command=proc_result.command,

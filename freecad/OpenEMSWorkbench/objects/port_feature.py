@@ -65,8 +65,56 @@ class OpenEMSPortProxy(FeatureProxyBase):
             "App::PropertyString",
             "PropagationDirection",
             "Port",
-            "Primary propagation direction (x, y, z).",
+            "Primary propagation direction (+x, -x, +y, -y, +z, -z).",
             DEFAULTS["port"]["propagation_direction"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyFloat",
+            "PortStartX",
+            "Port",
+            "Port region start X coordinate.",
+            DEFAULTS["port"]["start_x"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyFloat",
+            "PortStartY",
+            "Port",
+            "Port region start Y coordinate.",
+            DEFAULTS["port"]["start_y"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyFloat",
+            "PortStartZ",
+            "Port",
+            "Port region start Z coordinate.",
+            DEFAULTS["port"]["start_z"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyFloat",
+            "PortStopX",
+            "Port",
+            "Port region stop X coordinate.",
+            DEFAULTS["port"]["stop_x"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyFloat",
+            "PortStopY",
+            "Port",
+            "Port region stop Y coordinate.",
+            DEFAULTS["port"]["stop_y"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyFloat",
+            "PortStopZ",
+            "Port",
+            "Port region stop Z coordinate.",
+            DEFAULTS["port"]["stop_z"],
         )
 
 

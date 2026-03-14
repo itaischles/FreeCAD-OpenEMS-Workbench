@@ -47,6 +47,9 @@ def read_analysis_for_export(analysis) -> dict:
                 "DeltaUnit",
                 "NumberOfTimeSteps",
                 "EndCriteria",
+                "ExcitationType",
+                "ExcitationF0",
+                "ExcitationFc",
                 "OutputDirectory",
                 "SolverExecutable",
                 "SolverArguments",
@@ -73,7 +76,19 @@ def read_analysis_for_export(analysis) -> dict:
         "ports": [
             _object_to_dict(
                 p,
-                ["PortType", "PortNumber", "Resistance", "Excite", "PropagationDirection"],
+                [
+                    "PortType",
+                    "PortNumber",
+                    "Resistance",
+                    "Excite",
+                    "PropagationDirection",
+                    "PortStartX",
+                    "PortStartY",
+                    "PortStartZ",
+                    "PortStopX",
+                    "PortStopY",
+                    "PortStopZ",
+                ],
             )
             for p in sorted(members.ports, key=lambda item: int(getattr(item, "PortNumber", 0)))
         ],

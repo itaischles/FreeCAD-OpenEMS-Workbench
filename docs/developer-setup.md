@@ -119,3 +119,18 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 	- Run Simulation
 	- Toggle Mesh Overlay
 9. Verify no regressions in behavior from Phase 7 run pipeline and Phase 6 overlay features.
+
+## Phase 9 manual verification
+
+1. Deploy the workbench and open FreeCAD.
+2. Create a minimal analysis with one Simulation, one Grid, one Material, one Boundary, and one Port.
+3. In Simulation task panel, set excitation fields:
+	- `Excitation Type` = `Gaussian`
+	- `Excitation F0` > 0
+	- `Excitation Fc` > 0
+4. In Port task panel, keep `Port Type` as `Lumped` and set region coordinates so start and stop are different.
+5. Keep exactly one port with `Excite = true`.
+6. Run `Run Preflight` and verify there are no excitation/port configuration errors.
+7. Run `Run Simulation` and inspect generated script.
+8. Verify script includes `FDTD.SetGaussExcite(...)` and `FDTD.AddLumpedPort(...)` lines.
+9. Change port type to `Waveguide` and rerun preflight; verify it reports unsupported type for Phase 9 MVP.

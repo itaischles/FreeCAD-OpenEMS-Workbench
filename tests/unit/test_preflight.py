@@ -34,11 +34,28 @@ def _minimal_valid_analysis():
         "OpenEMS_Simulation",
         CoordinateSystem="Cartesian",
         OutputDirectory="",
+        ExcitationType="Gaussian",
+        ExcitationF0=1.0e9,
+        ExcitationFc=5.0e8,
     )
     grid = Obj("Grid", "OpenEMS_Grid", CoordinateSystem="Cartesian")
     mat = Obj("Material", "OpenEMS_Material")
     bnd = Obj("Boundary", "OpenEMS_Boundary")
-    port = Obj("Port1", "OpenEMS_Port", PortNumber=1)
+    port = Obj(
+        "Port1",
+        "OpenEMS_Port",
+        PortType="Lumped",
+        PortNumber=1,
+        Resistance=50.0,
+        Excite=True,
+        PropagationDirection="+z",
+        PortStartX=0.0,
+        PortStartY=0.0,
+        PortStartZ=0.0,
+        PortStopX=0.0,
+        PortStopY=0.0,
+        PortStopZ=1.0,
+    )
     dump = Obj("Dump", "OpenEMS_DumpBox", FrequencySpec="1e9,2e9")
     return Analysis([sim, grid, mat, bnd, port, dump])
 
@@ -85,3 +102,46 @@ def test_preflight_warns_for_openems_exe_in_script_mode():
     simulation.SolverExecutable = "C:/tools/openEMS.exe"
     findings = run_preflight(analysis)
     assert any(f.check_id == "simulation.solver_executable_script_mode" for f in findings)
+
+
+def test_preflight_blocks_non_lumped_port_type_in_mvp():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    port = analysis.Group[4]
+    port.PortType = "Waveguide"
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "port.type_supported" for f in findings)
+
+
+def test_preflight_blocks_invalid_excitation_values():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    simulation = analysis.Group[0]
+    simulation.ExcitationF0 = 0.0
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "simulation.excitation_f0_positive" for f in findings)
+
+
+def test_preflight_requires_single_excited_port():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    port = analysis.Group[4]
+    port.Excite = False
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "port.single_excitation_source" for f in findings)
+
+
+def test_preflight_requires_span_on_excitation_axis():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    port = analysis.Group[4]
+    port.PropagationDirection = "+z"
+    port.PortStartZ = 0.0
+    port.PortStopZ = 0.0
+    port.PortStopX = 1.0
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "port.region_excitation_axis_span" for f in findings)

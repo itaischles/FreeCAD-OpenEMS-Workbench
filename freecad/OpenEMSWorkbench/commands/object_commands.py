@@ -643,11 +643,21 @@ class _RunSimulationCommand:
             if not line:
                 return
             App.Console.PrintMessage(f"openEMS: {line}\n")
+            if Gui is not None:
+                try:
+                    Gui.updateGui()
+                except Exception:
+                    pass
 
         def _solver_stderr(line: str):
             if not line:
                 return
             App.Console.PrintError(f"openEMS: {line}\n")
+            if Gui is not None:
+                try:
+                    Gui.updateGui()
+                except Exception:
+                    pass
 
         result = run_analysis(
             analysis,

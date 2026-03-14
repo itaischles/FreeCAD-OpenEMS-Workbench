@@ -27,3 +27,18 @@ def test_coordinate_and_port_enums_are_defined():
     assert "Cylindrical" in model.COORDINATE_SYSTEMS
     assert "Lumped" in model.PORT_TYPES
     assert "Waveguide" in model.PORT_TYPES
+    assert "Gaussian" in model.EXCITATION_TYPES
+
+
+def test_excitation_and_port_region_defaults_exist():
+    from OpenEMSWorkbench import model
+
+    sim_defaults = model.DEFAULTS["simulation"]
+    port_defaults = model.DEFAULTS["port"]
+
+    assert sim_defaults["excitation_type"] == "Gaussian"
+    assert sim_defaults["excitation_f0"] > 0.0
+    assert sim_defaults["excitation_fc"] > 0.0
+    assert port_defaults["propagation_direction"] == "+z"
+    assert "start_x" in port_defaults
+    assert "stop_z" in port_defaults

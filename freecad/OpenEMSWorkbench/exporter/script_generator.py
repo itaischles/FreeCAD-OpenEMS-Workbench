@@ -3,6 +3,59 @@ from __future__ import annotations
 from pathlib import Path
 
 
+def _as_float(value, default: float) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return float(default)
+
+
+def _as_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return int(default)
+
+
+def _normalize_direction(value) -> tuple[str, bool]:
+    direction = str(value or "+z").strip().lower()
+    if direction in {"x", "y", "z"}:
+        return direction, False
+    if direction in {"+x", "+y", "+z"}:
+        return direction[1], False
+    if direction in {"-x", "-y", "-z"}:
+        return direction[1], True
+    return "z", False
+
+
+def _axis_lines(base_resolution: float, max_resolution: float) -> list[float]:
+    step = max(float(base_resolution), 1e-9)
+    max_step = max(float(max_resolution), step)
+    half_span = max(max_step * 8.0, step * 12.0)
+    pos = 0.0
+    lines: list[float] = [0.0]
+
+    while pos + step < half_span:
+        pos += step
+        lines.append(round(pos, 9))
+        step = min(max_step, step * 1.3)
+
+    mirrored = [-value for value in reversed(lines[1:])]
+    return mirrored + lines
+
+
+def _grid_lines_from_model(model) -> tuple[list[float], list[float], list[float], float]:
+    grid = model.grid or {}
+    sim = model.simulation or {}
+    base = _as_float(grid.get("BaseResolution", 1.0), 1.0)
+    max_res = _as_float(grid.get("MaxResolution", 5.0), 5.0)
+    if max_res < base:
+        max_res = base
+    delta_unit = _as_float(sim.get("DeltaUnit", 1e-3), 1e-3)
+    axis = _axis_lines(base, max_res)
+    return axis, axis, axis, delta_unit
+
+
 def generate_openems_script(
     model,
     script_path: str | Path,
@@ -24,8 +77,25 @@ def generate_openems_script(
     lines.append("from pathlib import Path")
     lines.append("")
     lines.append("CSX = CSXCAD.ContinuousStructure()")
-    lines.append("FDTD = openEMS.openEMS()")
+    x_lines, y_lines, z_lines, delta_unit = _grid_lines_from_model(model)
+    lines.append("grid = CSX.GetGrid()")
+    lines.append(f"grid.SetDeltaUnit({delta_unit})")
+    lines.append(f"grid.AddLine('x', {x_lines})")
+    lines.append(f"grid.AddLine('y', {y_lines})")
+    lines.append(f"grid.AddLine('z', {z_lines})")
+    lines.append("")
+    sim = model.simulation or {}
+    nr_ts = _as_int(sim.get("NumberOfTimeSteps", 100000), 100000)
+    end_criteria = _as_float(sim.get("EndCriteria", 1e-5), 1e-5)
+    lines.append(f"FDTD = openEMS.openEMS(NrTS={nr_ts}, EndCriteria={end_criteria})")
     lines.append("FDTD.SetCSX(CSX)")
+    excitation_type = str(sim.get("ExcitationType", "Gaussian") or "Gaussian")
+    if excitation_type == "Gaussian":
+        f0 = _as_float(sim.get("ExcitationF0", 1e9), 1e9)
+        fc = _as_float(sim.get("ExcitationFc", 5e8), 5e8)
+        lines.append(f"FDTD.SetGaussExcite({f0}, {fc})")
+    else:
+        lines.append(f"# Unsupported excitation type for Phase 9 MVP: {excitation_type}")
     lines.append("")
 
     if model.boundary:
@@ -69,6 +139,26 @@ def generate_openems_script(
             f"# PORT {port.get('name')}: type={port.get('PortType')} "
             f"num={port.get('PortNumber')} R={port.get('Resistance')}"
         )
+        if str(port.get("PortType", "")).strip() == "Lumped":
+            number = _as_int(port.get("PortNumber", 1), 1)
+            resistance = _as_float(port.get("Resistance", 50.0), 50.0)
+            excite = 1.0 if bool(port.get("Excite", False)) else 0.0
+            direction, reverse = _normalize_direction(port.get("PropagationDirection"))
+            start = [
+                _as_float(port.get("PortStartX", 0.0), 0.0),
+                _as_float(port.get("PortStartY", 0.0), 0.0),
+                _as_float(port.get("PortStartZ", 0.0), 0.0),
+            ]
+            stop = [
+                _as_float(port.get("PortStopX", 1.0), 1.0),
+                _as_float(port.get("PortStopY", 0.0), 0.0),
+                _as_float(port.get("PortStopZ", 0.0), 0.0),
+            ]
+            if reverse:
+                start, stop = stop, start
+            lines.append(
+                f"port_{number} = FDTD.AddLumpedPort({number}, {resistance}, {start}, {stop}, '{direction}', {excite})"
+            )
     lines.append("")
 
     lines.append("# Dump boxes")
