@@ -82,3 +82,15 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 6. Run `Refresh Mesh Overlay` and verify the displayed mesh updates.
 7. Run `Refresh Mesh Overlay` again without property changes and verify report view indicates refresh skip or no unnecessary redraw behavior.
 8. Switch documents or views and verify no stale overlay artifacts remain and no report-view errors occur.
+
+## Phase 7 manual verification
+
+1. Deploy the workbench and open FreeCAD.
+2. Create a valid analysis containing Simulation, Grid, Material, Boundary, and Port objects.
+3. Open Simulation task panel and set `SolverExecutable` to a valid executable path for your openEMS runtime.
+4. Optionally set `SolverArguments` and confirm `RunBlocking` is enabled.
+5. Run `Run Preflight` and verify warnings/errors are understandable.
+6. Run `Run Simulation` and verify report view shows run start, completion/failure, script path, and stdout/stderr log paths.
+7. Open the generated `stdout.log` and `stderr.log` files and verify process output was captured.
+8. Intentionally clear `SolverExecutable` and rerun `Run Simulation`; verify a clear configuration error is printed without crashing FreeCAD.
+9. Confirm `Export Dry-Run Script` and mesh overlay commands still behave as expected after run integration.

@@ -67,3 +67,11 @@ def test_preflight_detects_duplicate_ports():
     analysis.Group.append(Obj("Port2", "OpenEMS_Port", PortNumber=1))
     findings = run_preflight(analysis)
     assert any(f.check_id == "port.unique_number" for f in findings)
+
+
+def test_preflight_warns_when_solver_executable_missing():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "simulation.solver_executable_configured" for f in findings)
