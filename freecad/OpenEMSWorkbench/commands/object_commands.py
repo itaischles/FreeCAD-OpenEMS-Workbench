@@ -554,10 +554,22 @@ class _RunSimulationCommand:
             return
         App.Console.PrintMessage(f"OpenEMS: Runtime check passed. {runtime_message}\n")
 
+        def _solver_stdout(line: str):
+            if not line:
+                return
+            App.Console.PrintMessage(f"openEMS: {line}\n")
+
+        def _solver_stderr(line: str):
+            if not line:
+                return
+            App.Console.PrintError(f"openEMS: {line}\n")
+
         result = run_analysis(
             analysis,
             export_base,
             str(getattr(doc, "Name", "Document")),
+            on_stdout_line=_solver_stdout,
+            on_stderr_line=_solver_stderr,
         )
 
         if result.status == "blocked":

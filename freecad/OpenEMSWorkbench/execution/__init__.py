@@ -131,6 +131,8 @@ def run_analysis(
 	analysis,
 	base_output_dir: str | Path,
 	document_name: str,
+	on_stdout_line=None,
+	on_stderr_line=None,
 ) -> ExecutionResult:
 	ok, findings, summary = preflight_gate(analysis)
 	if not ok:
@@ -204,6 +206,8 @@ def run_analysis(
 			cwd=cwd,
 			stdout_log=stdout_log,
 			stderr_log=stderr_log,
+			on_stdout_line=on_stdout_line,
+			on_stderr_line=on_stderr_line,
 		)
 	except Exception as exc:
 		return ExecutionResult(
