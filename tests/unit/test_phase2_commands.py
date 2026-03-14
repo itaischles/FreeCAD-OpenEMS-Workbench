@@ -25,6 +25,7 @@ def test_workbench_command_registry_contains_phase2_commands():
         "OpenEMS_EditSelected",
         "OpenEMS_RunPreflight",
         "OpenEMS_ExportDryRun",
+        "OpenEMS_RunSimulation",
         "OpenEMS_ShowHideMeshOverlay",
         "OpenEMS_RefreshMeshOverlay",
     }

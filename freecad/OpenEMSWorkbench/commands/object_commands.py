@@ -53,9 +53,9 @@ except ImportError:
     from OpenEMSWorkbench.validation import format_findings, run_preflight, summarize_findings
 
 try:
-    from execution import preflight_gate
+    from execution import preflight_gate, run_analysis
 except ImportError:
-    from OpenEMSWorkbench.execution import preflight_gate
+    from OpenEMSWorkbench.execution import preflight_gate, run_analysis
 
 try:
     from exporter import export_analysis_dry_run
@@ -121,6 +121,7 @@ SET_ACTIVE_ANALYSIS_COMMAND = "OpenEMS_SetActiveAnalysis"
 ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND = "OpenEMS_AssignSelectedToActiveAnalysis"
 RUN_PREFLIGHT_COMMAND = "OpenEMS_RunPreflight"
 EXPORT_DRY_RUN_COMMAND = "OpenEMS_ExportDryRun"
+RUN_SIMULATION_COMMAND = "OpenEMS_RunSimulation"
 SHOW_HIDE_MESH_OVERLAY_COMMAND = "OpenEMS_ShowHideMeshOverlay"
 REFRESH_MESH_OVERLAY_COMMAND = "OpenEMS_RefreshMeshOverlay"
 
@@ -448,6 +449,75 @@ class _ShowHideMeshOverlayCommand:
         return bool(is_overlay_visible())
 
 
+class _RunSimulationCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Run Simulation",
+            "ToolTip": "Run preflight, export run-ready script, and execute solver.",
+            "Pixmap": _command_icon(),
+        }
+
+    def Activated(self):
+        if App is None:
+            return
+        doc = App.ActiveDocument
+        if doc is None:
+            App.Console.PrintError("OpenEMS: No active document. Create a document first.\n")
+            return
+
+        analysis = get_active_analysis(doc)
+        if analysis is None:
+            analyses = get_analyses(doc)
+            if len(analyses) == 1:
+                analysis = analyses[0]
+            else:
+                App.Console.PrintError("OpenEMS: No active analysis found.\n")
+                return
+
+        export_base = os.path.join(
+            App.getUserAppDataDir(),
+            "Mod",
+            "OpenEMSWorkbench",
+            "exports",
+        )
+
+        App.Console.PrintMessage("OpenEMS: Running simulation (blocking mode).\n")
+        result = run_analysis(
+            analysis,
+            export_base,
+            str(getattr(doc, "Name", "Document")),
+        )
+
+        if result.status == "blocked":
+            App.Console.PrintError("OpenEMS: Run blocked by preflight errors.\n")
+            for line in format_findings(result.findings):
+                App.Console.PrintMessage(f"OpenEMS Preflight: {line}\n")
+            return
+
+        if result.status == "failed":
+            App.Console.PrintError(f"OpenEMS: Run failed: {result.message}\n")
+            if result.exit_code is not None:
+                App.Console.PrintError(f"OpenEMS: Exit code {result.exit_code}\n")
+        else:
+            App.Console.PrintMessage("OpenEMS: Simulation completed successfully.\n")
+
+        if result.paths:
+            if "script" in result.paths:
+                App.Console.PrintMessage(f"OpenEMS: Script path {result.paths['script']}\n")
+            if "stdout_log" in result.paths:
+                App.Console.PrintMessage(f"OpenEMS: Stdout log {result.paths['stdout_log']}\n")
+            if "stderr_log" in result.paths:
+                App.Console.PrintMessage(f"OpenEMS: Stderr log {result.paths['stderr_log']}\n")
+
+        if result.duration_seconds is not None:
+            App.Console.PrintMessage(
+                f"OpenEMS: Run time {result.duration_seconds:.2f} s\n"
+            )
+
+    def IsActive(self):
+        return App is not None and App.ActiveDocument is not None
+
+
 class _RefreshMeshOverlayCommand:
     def GetResources(self):
         return {
@@ -511,6 +581,10 @@ def register_object_commands() -> list[str]:
         Gui.addCommand(EXPORT_DRY_RUN_COMMAND, _ExportDryRunCommand())
     registered.append(EXPORT_DRY_RUN_COMMAND)
 
+    if RUN_SIMULATION_COMMAND not in Gui.listCommands():
+        Gui.addCommand(RUN_SIMULATION_COMMAND, _RunSimulationCommand())
+    registered.append(RUN_SIMULATION_COMMAND)
+
     if SHOW_HIDE_MESH_OVERLAY_COMMAND not in Gui.listCommands():
         Gui.addCommand(SHOW_HIDE_MESH_OVERLAY_COMMAND, _ShowHideMeshOverlayCommand())
     registered.append(SHOW_HIDE_MESH_OVERLAY_COMMAND)
@@ -534,6 +608,7 @@ WORKBENCH_OBJECT_COMMANDS = [
     EDIT_COMMAND_NAME,
     RUN_PREFLIGHT_COMMAND,
     EXPORT_DRY_RUN_COMMAND,
+    RUN_SIMULATION_COMMAND,
     SHOW_HIDE_MESH_OVERLAY_COMMAND,
     REFRESH_MESH_OVERLAY_COMMAND,
 ]
