@@ -204,6 +204,25 @@ def test_auto_configure_solver_runtime_sets_detected_python(monkeypatch):
     assert simulation.SolverExecutable == "C:/Python/python.exe"
 
 
+def test_auto_configure_solver_runtime_uses_saved_preference(monkeypatch):
+    from OpenEMSWorkbench import execution
+
+    simulation = _SimulationStub(executable="")
+    analysis = _AnalysisStub(simulation)
+
+    monkeypatch.setattr(execution, "get_saved_solver_executable", lambda: "C:/Saved/python.exe")
+    monkeypatch.setattr(
+        execution,
+        "validate_python_runtime",
+        lambda executable: (True, "ok"),
+    )
+
+    ok, message = execution.auto_configure_solver_runtime(analysis)
+    assert ok
+    assert "Using saved runtime configuration" in message
+    assert simulation.SolverExecutable == "C:/Saved/python.exe"
+
+
 def test_validate_configured_solver_runtime_rejects_openems_binary():
     from OpenEMSWorkbench import execution
 

@@ -35,6 +35,14 @@ except ImportError:
 		validate_python_runtime,
 	)
 
+try:
+	from utils.runtime_settings import get_saved_solver_executable, set_saved_solver_executable
+except ImportError:
+	from OpenEMSWorkbench.utils.runtime_settings import (
+		get_saved_solver_executable,
+		set_saved_solver_executable,
+	)
+
 
 @dataclass
 class ExecutionResult:
@@ -80,6 +88,13 @@ def auto_configure_solver_runtime(analysis) -> tuple[bool, str]:
 	if configured:
 		return True, f"SolverExecutable already configured: {configured}"
 
+	saved = str(get_saved_solver_executable() or "").strip()
+	if saved:
+		ok, message = validate_python_runtime(saved)
+		if ok:
+			simulation.SolverExecutable = saved
+			return True, f"Using saved runtime configuration: {saved}"
+
 	discovery = discover_python_runtime()
 	if not discovery.ok:
 		checked = " | ".join(discovery.checked[-3:]) if discovery.checked else ""
@@ -87,6 +102,7 @@ def auto_configure_solver_runtime(analysis) -> tuple[bool, str]:
 		return False, f"{discovery.message}{suffix}"
 
 	simulation.SolverExecutable = discovery.executable
+	set_saved_solver_executable(discovery.executable)
 	if hasattr(simulation, "SolverArguments"):
 		simulation.SolverArguments = str(getattr(simulation, "SolverArguments", "") or "")
 	return True, discovery.message
