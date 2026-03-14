@@ -30,10 +30,27 @@ def _normalize_candidate(path: str) -> str:
     return os.path.normpath(text) if text else ""
 
 
-def _probe_python_runtime(executable: str, timeout_seconds: int = 8) -> tuple[bool, str]:
+def _resolve_openems_install_dir() -> str:
+    env_root = _normalize_candidate(os.environ.get("OPENEMS_INSTALL_DIR", ""))
+    if env_root and os.path.isdir(env_root):
+        return env_root
+
+    fallback = _normalize_candidate(r"C:\openEMS")
+    if fallback and os.path.isdir(fallback):
+        return fallback
+    return ""
+
+
+def _probe_python_runtime(executable: str, timeout_seconds: int = 20) -> tuple[bool, str]:
     candidate = _normalize_candidate(executable)
     if not candidate:
         return False, "empty candidate"
+
+    env = dict(os.environ)
+    openems_root = _resolve_openems_install_dir()
+    if openems_root:
+        env["OPENEMS_INSTALL_DIR"] = openems_root
+        env["PATH"] = openems_root + os.pathsep + env.get("PATH", "")
 
     try:
         proc = subprocess.run(
@@ -42,7 +59,10 @@ def _probe_python_runtime(executable: str, timeout_seconds: int = 8) -> tuple[bo
             text=True,
             timeout=timeout_seconds,
             check=False,
+            env=env,
         )
+    except subprocess.TimeoutExpired:
+        return False, f"timeout after {timeout_seconds}s"
     except Exception as exc:
         return False, str(exc)
 
