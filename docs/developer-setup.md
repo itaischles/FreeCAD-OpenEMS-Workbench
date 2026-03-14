@@ -71,3 +71,14 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 5. Verify report view prints export stats and paths for script + STL directory.
 6. Open the generated script and confirm geometry comments include both direct primitive mapping and STL fallback entries.
 7. Run export again without changes and verify output file naming/order remains stable.
+
+## Phase 6 manual verification
+
+1. Deploy the workbench and open FreeCAD.
+2. Create an analysis and assign one Grid object to it.
+3. Run `Show/Hide Mesh Overlay` and verify mesh lines appear in the active 3D view.
+4. Run `Show/Hide Mesh Overlay` again and verify the overlay is removed cleanly.
+5. Change Grid values such as `BaseResolution`, `MaxResolution`, or `CoordinateSystem`.
+6. Run `Refresh Mesh Overlay` and verify the displayed mesh updates.
+7. Run `Refresh Mesh Overlay` again without property changes and verify report view indicates refresh skip or no unnecessary redraw behavior.
+8. Switch documents or views and verify no stale overlay artifacts remain and no report-view errors occur.

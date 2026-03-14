@@ -62,6 +62,21 @@ try:
 except ImportError:
     from OpenEMSWorkbench.exporter import export_analysis_dry_run
 
+try:
+    from meshing import MeshResolutionError, build_mesh_for_active_analysis
+except ImportError:
+    from OpenEMSWorkbench.meshing import MeshResolutionError, build_mesh_for_active_analysis
+
+try:
+    from visualization import hide_overlay, is_overlay_visible, refresh_overlay, show_overlay
+except ImportError:
+    from OpenEMSWorkbench.visualization import (
+        hide_overlay,
+        is_overlay_visible,
+        refresh_overlay,
+        show_overlay,
+    )
+
 
 COMMAND_DEFINITIONS = {
     "OpenEMS_CreateAnalysis": {
@@ -106,6 +121,8 @@ SET_ACTIVE_ANALYSIS_COMMAND = "OpenEMS_SetActiveAnalysis"
 ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND = "OpenEMS_AssignSelectedToActiveAnalysis"
 RUN_PREFLIGHT_COMMAND = "OpenEMS_RunPreflight"
 EXPORT_DRY_RUN_COMMAND = "OpenEMS_ExportDryRun"
+SHOW_HIDE_MESH_OVERLAY_COMMAND = "OpenEMS_ShowHideMeshOverlay"
+REFRESH_MESH_OVERLAY_COMMAND = "OpenEMS_RefreshMeshOverlay"
 
 
 def _command_icon() -> str:
@@ -119,6 +136,16 @@ def _command_icon() -> str:
         "icons",
         "OpenEMSWorkbench.svg",
     )
+
+
+def _resolve_mesh(doc):
+    try:
+        _, grid, mesh = build_mesh_for_active_analysis(doc)
+        return grid, mesh, None
+    except MeshResolutionError as exc:
+        return None, None, str(exc)
+    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+        return None, None, f"Unexpected mesh resolution error: {exc}"
 
 
 class _CreateObjectCommand:
@@ -381,6 +408,76 @@ class _ExportDryRunCommand:
         return App is not None and App.ActiveDocument is not None
 
 
+class _ShowHideMeshOverlayCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Show/Hide Mesh Overlay",
+            "ToolTip": "Toggle viewport mesh overlay generated from active analysis grid.",
+            "Pixmap": _command_icon(),
+            "Checkable": True,
+        }
+
+    def Activated(self, checked=False):
+        _ = checked
+        if App is None:
+            return
+        doc = App.ActiveDocument
+        if doc is None:
+            App.Console.PrintError("OpenEMS: No active document. Create a document first.\n")
+            return
+
+        if is_overlay_visible():
+            _, message = hide_overlay()
+            App.Console.PrintMessage(f"{message}\n")
+            return
+
+        grid, mesh, error = _resolve_mesh(doc)
+        if error is not None:
+            App.Console.PrintError(f"OpenEMS: {error}\n")
+            return
+
+        _, message = show_overlay(mesh)
+        App.Console.PrintMessage(
+            f"{message} Grid='{getattr(grid, 'Label', 'openEMS Grid')}'.\n"
+        )
+
+    def IsActive(self):
+        return App is not None and Gui is not None and App.ActiveDocument is not None
+
+    def IsChecked(self):
+        return bool(is_overlay_visible())
+
+
+class _RefreshMeshOverlayCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Refresh Mesh Overlay",
+            "ToolTip": "Regenerate and refresh viewport mesh overlay from active analysis grid.",
+            "Pixmap": _command_icon(),
+        }
+
+    def Activated(self):
+        if App is None:
+            return
+        doc = App.ActiveDocument
+        if doc is None:
+            App.Console.PrintError("OpenEMS: No active document. Create a document first.\n")
+            return
+
+        grid, mesh, error = _resolve_mesh(doc)
+        if error is not None:
+            App.Console.PrintError(f"OpenEMS: {error}\n")
+            return
+
+        _, message = refresh_overlay(mesh)
+        App.Console.PrintMessage(
+            f"{message} Grid='{getattr(grid, 'Label', 'openEMS Grid')}'.\n"
+        )
+
+    def IsActive(self):
+        return App is not None and Gui is not None and App.ActiveDocument is not None
+
+
 def register_object_commands() -> list[str]:
     if Gui is None:
         return []
@@ -413,6 +510,14 @@ def register_object_commands() -> list[str]:
     if EXPORT_DRY_RUN_COMMAND not in Gui.listCommands():
         Gui.addCommand(EXPORT_DRY_RUN_COMMAND, _ExportDryRunCommand())
     registered.append(EXPORT_DRY_RUN_COMMAND)
+
+    if SHOW_HIDE_MESH_OVERLAY_COMMAND not in Gui.listCommands():
+        Gui.addCommand(SHOW_HIDE_MESH_OVERLAY_COMMAND, _ShowHideMeshOverlayCommand())
+    registered.append(SHOW_HIDE_MESH_OVERLAY_COMMAND)
+
+    if REFRESH_MESH_OVERLAY_COMMAND not in Gui.listCommands():
+        Gui.addCommand(REFRESH_MESH_OVERLAY_COMMAND, _RefreshMeshOverlayCommand())
+    registered.append(REFRESH_MESH_OVERLAY_COMMAND)
     return registered
 
 
@@ -429,4 +534,6 @@ WORKBENCH_OBJECT_COMMANDS = [
     EDIT_COMMAND_NAME,
     RUN_PREFLIGHT_COMMAND,
     EXPORT_DRY_RUN_COMMAND,
+    SHOW_HIDE_MESH_OVERLAY_COMMAND,
+    REFRESH_MESH_OVERLAY_COMMAND,
 ]
