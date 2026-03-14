@@ -48,7 +48,60 @@ class ViewProviderBase:
     TYPE = "OpenEMS_BaseView"
 
     def attach(self, vobj: Any) -> None:
+        vobj.Proxy = self
         self.Object = getattr(vobj, "Object", None)
+
+    def setEdit(self, vobj: Any, mode: int = 0) -> bool:  # noqa: N802 - FreeCAD API
+        _ = mode
+        try:
+            import FreeCAD as App
+            import FreeCADGui as Gui
+            try:
+                from gui.task_panels import create_panel_for_object
+            except ImportError:
+                from OpenEMSWorkbench.gui.task_panels import create_panel_for_object
+        except Exception as exc:
+            try:
+                import FreeCAD as App
+                App.Console.PrintError(f"OpenEMS: Failed to load task-panel modules: {exc}\n")
+            except Exception:
+                pass
+            return False
+
+        obj = getattr(vobj, "Object", None)
+        panel = create_panel_for_object(obj) if obj is not None else None
+        if panel is None:
+            App.Console.PrintError("OpenEMS: No task panel registered for selected object.\n")
+            return False
+
+        Gui.Control.showDialog(panel)
+        return True
+
+    def unsetEdit(self, vobj: Any, mode: int = 0) -> bool:  # noqa: N802 - FreeCAD API
+        _ = (vobj, mode)
+        try:
+            import FreeCADGui as Gui
+            Gui.Control.closeDialog()
+        except Exception:
+            return False
+        return True
+
+    def doubleClicked(self, vobj: Any) -> bool:  # noqa: N802 - FreeCAD API
+        try:
+            import FreeCADGui as Gui
+        except Exception:
+            return False
+
+        guidoc = Gui.ActiveDocument
+        obj = getattr(vobj, "Object", None)
+        if guidoc is None or obj is None:
+            return False
+
+        if guidoc.getInEdit() is not None:
+            return False
+
+        guidoc.setEdit(obj.Name)
+        return True
 
     def getDisplayModes(self, obj: Any) -> list[str]:  # noqa: N802 - FreeCAD API
         _ = obj

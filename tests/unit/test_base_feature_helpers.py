@@ -59,3 +59,17 @@ def test_set_enum_choices_preserves_existing_value_when_possible():
     obj2.Mode = "Z"
     set_enum_choices(obj2, "Mode", ["A", "B", "C"], "A")
     assert obj2.Mode == "A"
+
+
+class FakeViewObject:
+    def __init__(self):
+        self.Object = object()
+
+
+def test_viewprovider_attach_sets_proxy():
+    from OpenEMSWorkbench.objects.base_feature import ViewProviderBase
+
+    view = FakeViewObject()
+    vp = ViewProviderBase()
+    vp.attach(view)
+    assert view.Proxy is vp

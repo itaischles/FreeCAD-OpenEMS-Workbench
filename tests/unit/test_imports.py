@@ -26,4 +26,5 @@ def test_paths_module_resolves_resource_root():
 def test_command_module_imports_without_freecad():
     from OpenEMSWorkbench.commands import workbench_commands
 
-    assert workbench_commands.COMMAND_NAME == "OpenEMS_Placeholder"
+    assert "OpenEMS_CreateSimulation" in workbench_commands.WORKBENCH_COMMANDS
+    assert "OpenEMS_EditSelected" in workbench_commands.WORKBENCH_COMMANDS

@@ -38,3 +38,14 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 	- DumpBox
 5. Confirm each object appears in the tree and exposes properties in the Property editor.
 6. Save the document, close FreeCAD, reopen the document, and verify no proxy/view-provider errors appear in Report view.
+
+## Phase 3 manual verification
+
+1. Deploy the workbench.
+2. Start FreeCAD and switch to `OpenEMS` workbench.
+3. Create one object of each type (Simulation, Material, Boundary, Port, Grid, DumpBox).
+4. Select one OpenEMS object and trigger `Edit Selected OpenEMS Object` from the toolbar/menu.
+5. Change one value in the task panel and click `OK`; verify the property updates in the Property editor.
+6. Re-open edit mode and click `Cancel`; verify no additional changes are applied.
+7. Double-click each OpenEMS object in the tree and verify the corresponding task panel opens.
+8. Save the document, close FreeCAD, reopen it, and verify edited values are preserved without report-view errors.

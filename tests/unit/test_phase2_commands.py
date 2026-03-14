@@ -19,13 +19,14 @@ def test_workbench_command_registry_contains_phase2_commands():
         "OpenEMS_CreatePort",
         "OpenEMS_CreateGrid",
         "OpenEMS_CreateDumpBox",
-        "OpenEMS_Placeholder",
+        "OpenEMS_EditSelected",
     }
     assert expected.issubset(set(workbench_commands.WORKBENCH_COMMANDS))
 
 
 def test_object_command_definitions_exist():
-    from OpenEMSWorkbench.commands.object_commands import COMMAND_DEFINITIONS
+    from OpenEMSWorkbench.commands.object_commands import COMMAND_DEFINITIONS, EDIT_COMMAND_NAME
 
     assert len(COMMAND_DEFINITIONS) == 6
     assert "OpenEMS_CreateSimulation" in COMMAND_DEFINITIONS
+    assert EDIT_COMMAND_NAME == "OpenEMS_EditSelected"
