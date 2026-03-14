@@ -24,6 +24,7 @@ def test_workbench_command_registry_contains_phase2_commands():
         "OpenEMS_AssignSelectedToActiveAnalysis",
         "OpenEMS_EditSelected",
         "OpenEMS_RunPreflight",
+        "OpenEMS_ExportDryRun",
     }
     assert expected.issubset(set(workbench_commands.WORKBENCH_COMMANDS))
 

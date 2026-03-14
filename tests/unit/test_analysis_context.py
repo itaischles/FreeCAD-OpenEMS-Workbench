@@ -22,6 +22,13 @@ class Obj:
         self.IsActive = is_active
 
 
+class ShapeObj:
+    def __init__(self, name):
+        self.Name = name
+        self.Label = name
+        self.Shape = object()
+
+
 class AnalysisObj(Obj):
     def __init__(self, name, is_active=False):
         super().__init__(name, "OpenEMS_Analysis", is_active=is_active)
@@ -58,12 +65,14 @@ def test_add_member_to_analysis_filters_non_openems():
 
     analysis = AnalysisObj("Analysis")
     good = Obj("Mat", "OpenEMS_Material")
-    bad = Obj("Cube", "Part::Feature")
+    geom = ShapeObj("Cube")
+    bad = Obj("Text", "App::FeaturePython")
 
     assert add_member_to_analysis(analysis, good) is True
     assert add_member_to_analysis(analysis, good) is False
+    assert add_member_to_analysis(analysis, geom) is True
     assert add_member_to_analysis(analysis, bad) is False
-    assert analysis.Group == [good]
+    assert analysis.Group == [good, geom]
 
 
 def test_assign_members_to_analysis_detailed_counts_states():
@@ -74,10 +83,14 @@ def test_assign_members_to_analysis_detailed_counts_states():
     analysis.addObject(already)
 
     new_member = Obj("New", "OpenEMS_Port")
-    ignored = Obj("Ignored", "Part::Feature")
+    geometry = ShapeObj("Geo")
+    ignored = Obj("Ignored", "App::FeaturePython")
 
-    result = assign_members_to_analysis_detailed(analysis, [already, new_member, ignored])
+    result = assign_members_to_analysis_detailed(
+        analysis,
+        [already, new_member, geometry, ignored],
+    )
 
-    assert result["added"] == 1
+    assert result["added"] == 2
     assert result["already_member"] == 1
     assert result["ignored"] == 1

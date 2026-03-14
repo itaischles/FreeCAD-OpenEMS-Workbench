@@ -16,6 +16,22 @@ def is_openems_object(obj: Any) -> bool:
     return str(getattr(obj, "Name", "")).startswith("OpenEMS")
 
 
+def is_assignable_to_analysis(obj: Any) -> bool:
+    """Allow OpenEMS objects and external geometry objects with a Shape."""
+    if obj is None:
+        return False
+
+    proxy_type = get_proxy_type(obj)
+    if proxy_type == "OpenEMS_Analysis":
+        return False
+
+    if is_openems_object(obj):
+        return True
+
+    # Non-OpenEMS geometry (Part/Draft/etc.) is valid export scope if it has a Shape.
+    return hasattr(obj, "Shape")
+
+
 def get_analyses(doc: Any) -> list[Any]:
     if doc is None:
         return []
@@ -42,9 +58,7 @@ def set_active_analysis(doc: Any, active_analysis: Any) -> None:
 def add_member_to_analysis(analysis: Any, member: Any) -> bool:
     if analysis is None or member is None:
         return False
-    if not is_openems_object(member):
-        return False
-    if get_proxy_type(member) == "OpenEMS_Analysis":
+    if not is_assignable_to_analysis(member):
         return False
 
     current = list(getattr(analysis, "Group", []))

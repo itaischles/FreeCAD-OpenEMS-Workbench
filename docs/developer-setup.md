@@ -61,3 +61,13 @@ This creates `%APPDATA%\\FreeCAD\\Mod` if needed and mirrors `freecad/OpenEMSWor
 7. Intentionally break the setup (for example remove the Grid from analysis group or duplicate a port number) and run preflight again.
 8. Verify preflight prints actionable error lines and reports failure when errors are present.
 9. Save, close, and reopen the document; verify analysis group membership and object properties are preserved.
+
+## Phase 5 manual verification
+
+1. Deploy the workbench and open FreeCAD.
+2. Build a valid analysis with simulation/grid/material/boundary/port and run preflight to confirm pass.
+3. Add one simple `Part::Box` object to the analysis group and one non-box/cylinder shape.
+4. Run `Export Dry-Run Script`.
+5. Verify report view prints export stats and paths for script + STL directory.
+6. Open the generated script and confirm geometry comments include both direct primitive mapping and STL fallback entries.
+7. Run export again without changes and verify output file naming/order remains stable.

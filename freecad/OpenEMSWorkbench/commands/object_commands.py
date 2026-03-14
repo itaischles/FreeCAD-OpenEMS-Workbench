@@ -52,6 +52,16 @@ try:
 except ImportError:
     from OpenEMSWorkbench.validation import format_findings, run_preflight, summarize_findings
 
+try:
+    from execution import preflight_gate
+except ImportError:
+    from OpenEMSWorkbench.execution import preflight_gate
+
+try:
+    from exporter import export_analysis_dry_run
+except ImportError:
+    from OpenEMSWorkbench.exporter import export_analysis_dry_run
+
 
 COMMAND_DEFINITIONS = {
     "OpenEMS_CreateAnalysis": {
@@ -95,6 +105,7 @@ EDIT_COMMAND_NAME = "OpenEMS_EditSelected"
 SET_ACTIVE_ANALYSIS_COMMAND = "OpenEMS_SetActiveAnalysis"
 ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND = "OpenEMS_AssignSelectedToActiveAnalysis"
 RUN_PREFLIGHT_COMMAND = "OpenEMS_RunPreflight"
+EXPORT_DRY_RUN_COMMAND = "OpenEMS_ExportDryRun"
 
 
 def _command_icon() -> str:
@@ -313,6 +324,63 @@ class _RunPreflightCommand:
         return App is not None and App.ActiveDocument is not None
 
 
+class _ExportDryRunCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Export Dry-Run Script",
+            "ToolTip": "Run preflight and generate openEMS script plus geometry artifacts.",
+            "Pixmap": _command_icon(),
+        }
+
+    def Activated(self):
+        if App is None:
+            return
+        doc = App.ActiveDocument
+        if doc is None:
+            App.Console.PrintError("OpenEMS: No active document. Create a document first.\n")
+            return
+
+        analysis = get_active_analysis(doc)
+        if analysis is None:
+            analyses = get_analyses(doc)
+            if len(analyses) == 1:
+                analysis = analyses[0]
+            else:
+                App.Console.PrintError("OpenEMS: No active analysis found.\n")
+                return
+
+        ok, findings, summary = preflight_gate(analysis)
+        if not ok:
+            App.Console.PrintError("OpenEMS: Export blocked by preflight errors.\n")
+            for line in format_findings(findings):
+                App.Console.PrintMessage(f"OpenEMS Preflight: {line}\n")
+            return
+
+        export_base = os.path.join(
+            App.getUserAppDataDir(),
+            "Mod",
+            "OpenEMSWorkbench",
+            "exports",
+        )
+
+        try:
+            result = export_analysis_dry_run(analysis, export_base, str(getattr(doc, "Name", "Document")))
+            App.Console.PrintMessage("OpenEMS: Dry-run export completed.\n")
+            App.Console.PrintMessage(
+                "OpenEMS: Export stats "
+                f"geometry={result['geometry_count']}, "
+                f"primitives={result['primitive_count']}, "
+                f"stl={result['stl_count']}.\n"
+            )
+            App.Console.PrintMessage(f"OpenEMS: Script path {result['paths']['script']}\n")
+            App.Console.PrintMessage(f"OpenEMS: STL folder {result['paths']['stl_dir']}\n")
+        except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+            App.Console.PrintError(f"OpenEMS: Dry-run export failed: {exc}\n")
+
+    def IsActive(self):
+        return App is not None and App.ActiveDocument is not None
+
+
 def register_object_commands() -> list[str]:
     if Gui is None:
         return []
@@ -341,6 +409,10 @@ def register_object_commands() -> list[str]:
     if RUN_PREFLIGHT_COMMAND not in Gui.listCommands():
         Gui.addCommand(RUN_PREFLIGHT_COMMAND, _RunPreflightCommand())
     registered.append(RUN_PREFLIGHT_COMMAND)
+
+    if EXPORT_DRY_RUN_COMMAND not in Gui.listCommands():
+        Gui.addCommand(EXPORT_DRY_RUN_COMMAND, _ExportDryRunCommand())
+    registered.append(EXPORT_DRY_RUN_COMMAND)
     return registered
 
 
@@ -356,4 +428,5 @@ WORKBENCH_OBJECT_COMMANDS = [
     ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND,
     EDIT_COMMAND_NAME,
     RUN_PREFLIGHT_COMMAND,
+    EXPORT_DRY_RUN_COMMAND,
 ]
