@@ -23,7 +23,34 @@ except ImportError:
     from OpenEMSWorkbench.utils.export_paths import build_export_paths, ensure_export_dirs
 
 
+def _build_assignment_lookup(extracted: dict) -> dict[str, dict[str, int | str]]:
+    lookup: dict[str, dict[str, int | str]] = {}
+    for item in extracted.get("material_assignments", []):
+        geometry_name = str(item.get("geometry_name", "")).strip()
+        if not geometry_name:
+            continue
+
+        material_name = str(item.get("material_name", "")).strip()
+        priority = int(item.get("priority", 0) or 0)
+        assignment = {
+            "material_name": material_name,
+            "priority": priority,
+        }
+
+        existing = lookup.get(geometry_name)
+        if existing is not None and existing != assignment:
+            raise ValueError(
+                f"Geometry '{geometry_name}' has multiple material assignments in export handoff"
+            )
+
+        lookup[geometry_name] = assignment
+
+    return lookup
+
+
 def _build_export_model(extracted: dict, stl_dir: Path) -> ExportModel:
+    assignment_lookup = _build_assignment_lookup(extracted)
+
     model = ExportModel(
         analysis_name=extracted["analysis_name"],
         simulation=extracted["simulation"],
@@ -38,9 +65,16 @@ def _build_export_model(extracted: dict, stl_dir: Path) -> ExportModel:
     for obj in extracted["geometry_objects"]:
         geometry_kind = classify_geometry_object(obj)
         if geometry_kind in {"box", "cylinder"}:
-            model.geometries.append(map_primitive_geometry(obj, geometry_kind))
+            entry = map_primitive_geometry(obj, geometry_kind)
         else:
-            model.geometries.append(export_as_stl_entry(obj, stl_dir))
+            entry = export_as_stl_entry(obj, stl_dir)
+
+        assignment = assignment_lookup.get(entry.object_name)
+        if assignment is not None:
+            entry.assigned_material_name = str(assignment["material_name"])
+            entry.assignment_priority = int(assignment["priority"])
+
+        model.geometries.append(entry)
 
     return model
 

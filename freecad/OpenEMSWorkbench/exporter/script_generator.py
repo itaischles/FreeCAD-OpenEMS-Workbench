@@ -56,6 +56,32 @@ def _grid_lines_from_model(model) -> tuple[list[float], list[float], list[float]
     return axis, axis, axis, delta_unit
 
 
+def _vec3(values, default: list[float]) -> list[float]:
+    if not isinstance(values, (list, tuple)) or len(values) != 3:
+        return [float(default[0]), float(default[1]), float(default[2])]
+    return [
+        _as_float(values[0], default[0]),
+        _as_float(values[1], default[1]),
+        _as_float(values[2], default[2]),
+    ]
+
+
+def _safe_symbol(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "material"
+    chars = []
+    for ch in text:
+        if ch.isalnum() or ch == "_":
+            chars.append(ch)
+        else:
+            chars.append("_")
+    symbol = "".join(chars)
+    if symbol and symbol[0].isdigit():
+        symbol = f"m_{symbol}"
+    return symbol or "material"
+
+
 def generate_openems_script(
     model,
     script_path: str | Path,
@@ -108,29 +134,69 @@ def generate_openems_script(
         )
     lines.append("")
 
+    lines.append("# Materials")
+    material_vars: dict[str, str] = {}
+    for idx, mat in enumerate(sorted(model.materials, key=lambda item: str(item.get("name", "")))):
+        mat_name = str(mat.get("name", f"Material_{idx + 1}") or f"Material_{idx + 1}")
+        symbol = f"mat_{idx}_{_safe_symbol(mat_name)}"
+        material_vars[mat_name] = symbol
+
+        is_pec = bool(mat.get("IsPEC", False))
+        if is_pec:
+            lines.append(f"{symbol} = CSX.AddMetal({mat_name!r})")
+        else:
+            eps = _as_float(mat.get("EpsilonR", 1.0), 1.0)
+            mu = _as_float(mat.get("MuR", 1.0), 1.0)
+            kappa = _as_float(mat.get("Kappa", 0.0), 0.0)
+            lines.append(f"{symbol} = CSX.AddMaterial({mat_name!r})")
+            lines.append(
+                f"{symbol}.SetMaterialProperty(epsilon={eps}, mue={mu}, kappa={kappa})"
+            )
+        lines.append(
+            f"# MAT {mat_name}: eps={mat.get('EpsilonR')} mu={mat.get('MuR')} "
+            f"kappa={mat.get('Kappa')} pec={mat.get('IsPEC')}"
+        )
+    lines.append("")
+
     lines.append("# Geometry mapping")
+    primitive_geometries = [geo for geo in model.geometries if geo.primitive in {"box", "cylinder"}]
+
+    if primitive_geometries:
+        needs_unassigned = any(
+            str(getattr(geo, "assigned_material_name", "") or "").strip() not in material_vars
+            for geo in primitive_geometries
+        )
+        if needs_unassigned:
+            lines.append("_phase33_unassigned_prop = CSX.AddMaterial('_phase33_unassigned')")
+            lines.append("_phase33_unassigned_prop.SetMaterialProperty(epsilon=1.0, mue=1.0, kappa=0.0)")
+
     for geo in sorted(model.geometries, key=lambda item: item.object_name):
         if geo.primitive == "box":
+            start = _vec3(geo.params.get("start"), [0.0, 0.0, 0.0])
+            stop = _vec3(geo.params.get("stop"), [1.0, 1.0, 1.0])
+            material_name = str(getattr(geo, "assigned_material_name", "") or "").strip()
+            prop_var = material_vars.get(material_name, "_phase33_unassigned_prop")
+            priority = _as_int(getattr(geo, "assignment_priority", 0), 0)
+            lines.append(f"{prop_var}.AddBox({start}, {stop}, priority={priority})")
             lines.append(
-                f"# BOX {geo.object_name}: start={geo.params['start']} stop={geo.params['stop']}"
+                f"# BOX {geo.object_name}: start={start} stop={stop}"
             )
         elif geo.primitive == "cylinder":
+            base = _vec3(geo.params.get("base"), [0.0, 0.0, 0.0])
+            radius = _as_float(geo.params.get("radius"), 1.0)
+            height = _as_float(geo.params.get("height"), 1.0)
+            top = [base[0], base[1], base[2] + height]
+            material_name = str(getattr(geo, "assigned_material_name", "") or "").strip()
+            prop_var = material_vars.get(material_name, "_phase33_unassigned_prop")
+            priority = _as_int(getattr(geo, "assignment_priority", 0), 0)
+            lines.append(f"{prop_var}.AddCylinder({base}, {top}, {radius}, priority={priority})")
             lines.append(
-                f"# CYLINDER {geo.object_name}: base={geo.params['base']} "
-                f"r={geo.params['radius']} h={geo.params['height']}"
+                f"# CYLINDER {geo.object_name}: base={base} r={radius} h={height}"
             )
         elif geo.primitive == "polyhedron":
             lines.append(
                 f"# POLYHEDRON {geo.object_name}: stl={geo.params['stl_path']}"
             )
-    lines.append("")
-
-    lines.append("# Materials")
-    for mat in model.materials:
-        lines.append(
-            f"# MAT {mat.get('name')}: eps={mat.get('EpsilonR')} mu={mat.get('MuR')} "
-            f"kappa={mat.get('Kappa')} pec={mat.get('IsPEC')}"
-        )
     lines.append("")
 
     lines.append("# Ports")

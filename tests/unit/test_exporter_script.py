@@ -24,6 +24,10 @@ def test_script_generator_writes_expected_lines(tmp_path):
             "ExcitationFc": 5e8,
         },
         grid={"name": "Grid"},
+        materials=[
+            {"name": "Copper", "IsPEC": True, "EpsilonR": 1.0, "MuR": 1.0, "Kappa": 0.0},
+            {"name": "FR4", "IsPEC": False, "EpsilonR": 4.2, "MuR": 1.0, "Kappa": 0.02},
+        ],
         boundary={"XMin": "PEC", "XMax": "PEC", "YMin": "PEC", "YMax": "PEC", "ZMin": "PEC", "ZMax": "PEC"},
         ports=[
             {
@@ -42,7 +46,22 @@ def test_script_generator_writes_expected_lines(tmp_path):
             }
         ],
         geometries=[
-            GeometryEntry("B", "Box", "box", {"start": [0, 0, 0], "stop": [1, 1, 1]}),
+            GeometryEntry(
+                "B",
+                "Box",
+                "box",
+                {"start": [0, 0, 0], "stop": [1, 1, 1]},
+                assigned_material_name="Copper",
+                assignment_priority=7,
+            ),
+            GeometryEntry(
+                "C",
+                "Cyl",
+                "cylinder",
+                {"base": [1, 2, 3], "radius": 0.5, "height": 4},
+                assigned_material_name="FR4",
+                assignment_priority=3,
+            ),
             GeometryEntry("P", "Poly", "polyhedron", {"stl_path": "C:/tmp/p.stl"}),
         ],
     )
@@ -55,7 +74,14 @@ def test_script_generator_writes_expected_lines(tmp_path):
     assert "grid.AddLine('z'" in text
     assert "FDTD.SetGaussExcite(" in text
     assert "AddLumpedPort(" in text
+    assert "CSX.AddMetal('Copper')" in text
+    assert "CSX.AddMaterial('FR4')" in text
+    assert "SetMaterialProperty(epsilon=4.2, mue=1.0, kappa=0.02)" in text
+    assert "AddBox([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], priority=7)" in text
+    assert "AddCylinder([1.0, 2.0, 3.0], [1.0, 2.0, 7.0], 0.5, priority=3)" in text
+    assert "_phase33_unassigned_prop" not in text
     assert "# BOX B" in text
+    assert "# CYLINDER C" in text
     assert "# POLYHEDRON P" in text
 
 
@@ -110,3 +136,31 @@ def test_script_generator_converts_signed_port_direction(tmp_path):
 
     assert "'+z'" not in text
     assert "'z'" in text
+
+
+def test_script_generator_uses_unassigned_fallback_for_missing_binding(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel, GeometryEntry
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={"ExcitationType": "Gaussian", "ExcitationF0": 1e9, "ExcitationFc": 5e8},
+        grid={"name": "Grid"},
+        materials=[{"name": "Copper", "IsPEC": True}],
+        geometries=[
+            GeometryEntry(
+                "B",
+                "Box",
+                "box",
+                {"start": [0, 0, 0], "stop": [1, 1, 1]},
+                assigned_material_name="MissingMat",
+                assignment_priority=4,
+            )
+        ],
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_missing.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "_phase33_unassigned_prop = CSX.AddMaterial('_phase33_unassigned')" in text
+    assert "_phase33_unassigned_prop.AddBox([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], priority=4)" in text

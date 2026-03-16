@@ -15,22 +15,22 @@ Goal: let the next session start fast without scanning the whole repository.
 
 - Date: 2026-03-16
 - Current phase (from MVP-plan): Phase 3 (export real geometry and materials)
-- Current commit task (for example: Commit 2.3): Phase 3, Commit 3.1 (reader-to-export mapping handoff usage)
-- Status: Ready to implement
+- Current commit task (for example: Commit 2.3): Phase 3 complete through Commit 3.4
+- Status: Completed
 - Branch name: not recorded in handoff yet
-- Last completed commit task: Phase 2, Commit 2.5 (documented handoff contract to Phase 3)
-- Next immediate task: implement Phase 3, Commit 3.1 (consume geometry-material assignment mapping in export model flow)
+- Last completed commit task: Phase 3, Commit 3.4 (STL fallback path coverage with direct/fallback tests)
+- Next immediate task: implement Phase 4, Commit 4.1 (compute analysis geometry bounding box and add configurable margin)
 
 ## Quick Context
 
-- One-paragraph summary of where we are: Phase 2 implementation is complete through Commit 2.5. Material objects now persist `AssignedGeometry` and `AssignmentPriority`, the material panel supports assign/reassign/unassign with assigned-geometry listing, preflight enforces exactly-one assignment and rejects stale/duplicate links, and export reader already emits assignment-aware fields (`AssignedGeometryNames`, `AssignmentPriority`, `material_assignments`). Tests for assignment flows and restore-style persistence are in place and passing. MVP plan now includes an explicit handoff contract from Phase 2 to Phase 3.
+- One-paragraph summary of where we are: Phase 3 implementation is now complete through Commit 3.4. Export model geometry entries now carry assignment binding (`assigned_material_name`, `assignment_priority`) from `material_assignments`, script export emits real CSX geometry for boxes/cylinders, material definitions are real (`AddMetal`/`AddMaterial` with dielectric properties), primitive geometry is bound to assigned material with priority, and STL fallback remains active for unsupported geometry. Exporter tests now cover assignment handoff consumption, material binding, direct primitives, fallback-only export, and mixed direct+fallback output.
 
 ## Changes Made This Session
 
-- Files changed: docs/MVP-plan.md, freecad/OpenEMSWorkbench/model/__init__.py, freecad/OpenEMSWorkbench/objects/material_feature.py, freecad/OpenEMSWorkbench/gui/task_panels/material_panel.py, freecad/OpenEMSWorkbench/exporter/document_reader.py, freecad/OpenEMSWorkbench/validation/preflight.py, tests/unit/test_material_feature.py, tests/unit/test_material_panel_logic.py, tests/unit/test_exporter_document_reader.py, tests/unit/test_preflight.py
-- Main behavior changed: material assignment is now persisted, editable in material panel, validated in preflight, and exported through reader handoff data
-- Tests added/updated: assignment property, assignment flow helpers, export reader assignment handoff, preflight assignment rules, restore lifecycle persistence
-- Tests run and result: focused Phase 2 test set passed (latest run: 22 passed)
+- Files changed: freecad/OpenEMSWorkbench/exporter/model.py, freecad/OpenEMSWorkbench/exporter/pipeline.py, freecad/OpenEMSWorkbench/exporter/script_generator.py, tests/unit/test_exporter_pipeline.py, tests/unit/test_exporter_script.py
+- Main behavior changed: Phase 3 export is now materially real for supported primitives. Geometry-material assignment handoff is consumed in export model flow, boxes/cylinders are emitted as real CSX primitives, material definitions are emitted as real CSX properties, and primitive emission now uses assignment priority.
+- Tests added/updated: exporter pipeline tests for assignment binding and direct/fallback coverage; script generator tests for material definition emission, priority binding, and unassigned fallback behavior.
+- Tests run and result: focused exporter suite passed (latest run: 11 passed)
 
 ## Completed Tasks
 
@@ -39,6 +39,10 @@ Goal: let the next session start fast without scanning the whole repository.
 - Commit 2.3 completed: preflight assignment checks implemented (missing assignment, stale links, duplicates).
 - Commit 2.4 completed: tests added for assign/reassign/unassign flows and restore-style persistence.
 - Commit 2.5 completed: Phase 2 to Phase 3 handoff contract documented in docs/session-handoff.md.
+- Commit 3.1 completed: export model flow now consumes geometry-material assignment handoff data.
+- Commit 3.2 completed: real CSX geometry emission added for directly supported primitives (box, cylinder).
+- Commit 3.3 completed: real material definitions emitted and primitive geometry bound to assigned material and priority.
+- Commit 3.4 completed: STL fallback path preserved and tests expanded for direct-only, fallback-only, and mixed export.
 
 ## Phase 2 To Phase 3 Handoff Contract
 
@@ -75,7 +79,7 @@ Goal: let the next session start fast without scanning the whole repository.
 
 Paste and edit this when opening a new chat session:
 
-"Read docs/session-handoff.md and docs/MVP-plan.md first. Continue from Phase 3, Commit 3.1 without rescoping. First summarize current status in 6 bullets max, then wire Phase 2 assignment handoff data into the export model so each exported geometry is bound to its assigned material and priority." 
+"Read docs/session-handoff.md and docs/MVP-plan.md first. Continue from Phase 4, Commit 4.1 without rescoping. First summarize current status in 6 bullets max, then implement analysis-geometry bounding box computation with configurable margin and wire it into export model flow." 
 
 ## Workbench deployment
 The workbench is written in the current workspace which is only for development. It needs to be transferred at the end of each coding cycle to the FreeCAD\MOD folder in order to be able to test it in FreeCAD. A deployment tool is located in this workspace under tools\deploy_workbench.py.

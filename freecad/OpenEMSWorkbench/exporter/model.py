@@ -10,6 +10,8 @@ class GeometryEntry:
     object_label: str
     primitive: str
     params: dict[str, Any] = field(default_factory=dict)
+    assigned_material_name: str | None = None
+    assignment_priority: int | None = None
 
 
 @dataclass
