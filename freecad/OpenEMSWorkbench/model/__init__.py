@@ -24,6 +24,7 @@ DEFAULTS = {
 		"mu_r": 1.0,
 		"kappa": 0.0,
 		"is_pec": False,
+		"assignment_priority": 0,
 	},
 	"boundary": {
 		"xmin": "PML_8",

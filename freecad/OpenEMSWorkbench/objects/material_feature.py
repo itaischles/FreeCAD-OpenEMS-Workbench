@@ -52,6 +52,22 @@ class OpenEMSMaterialProxy(FeatureProxyBase):
             "Use perfect electric conductor model.",
             DEFAULTS["material"]["is_pec"],
         )
+        add_property_if_missing(
+            obj,
+            "App::PropertyLinkList",
+            "AssignedGeometry",
+            "Assignment",
+            "Geometry objects assigned to this material.",
+            [],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyInteger",
+            "AssignmentPriority",
+            "Assignment",
+            "Primitive priority for overlap resolution during export.",
+            DEFAULTS["material"]["assignment_priority"],
+        )
 
 
 class OpenEMSMaterialViewProvider(ViewProviderBase):

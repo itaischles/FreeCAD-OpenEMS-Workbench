@@ -30,12 +30,49 @@ def _collect_geometry_objects(analysis) -> list:
     return geometry
 
 
+def _linked_object_names(value) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+
+    names = []
+    for item in value:
+        name = str(getattr(item, "Name", "")).strip()
+        if name:
+            names.append(name)
+    return sorted(set(names))
+
+
+def _material_to_dict(material) -> dict:
+    data = _object_to_dict(material, ["EpsilonR", "MuR", "Kappa", "IsPEC", "AssignmentPriority"])
+    data["AssignmentPriority"] = int(data.get("AssignmentPriority", 0) or 0)
+    data["AssignedGeometryNames"] = _linked_object_names(getattr(material, "AssignedGeometry", []))
+    return data
+
+
 def read_analysis_for_export(analysis) -> dict:
     members = collect_members(analysis)
 
     simulation = members.simulations[0] if members.simulations else None
     grid = members.grids[0] if members.grids else None
     boundary = members.boundaries[0] if members.boundaries else None
+    material_entries = [_material_to_dict(m) for m in members.materials]
+    material_assignments = []
+
+    for material in material_entries:
+        material_name = str(material.get("name", ""))
+        priority = int(material.get("AssignmentPriority", 0) or 0)
+        for geometry_name in material.get("AssignedGeometryNames", []):
+            material_assignments.append(
+                {
+                    "geometry_name": geometry_name,
+                    "material_name": material_name,
+                    "priority": priority,
+                }
+            )
+
+    material_assignments.sort(
+        key=lambda item: (item["geometry_name"], item["material_name"])
+    )
 
     return {
         "analysis_name": str(getattr(analysis, "Name", "analysis")),
@@ -70,9 +107,8 @@ def read_analysis_for_export(analysis) -> dict:
         )
         if boundary is not None
         else {},
-        "materials": [
-            _object_to_dict(m, ["EpsilonR", "MuR", "Kappa", "IsPEC"]) for m in members.materials
-        ],
+        "materials": material_entries,
+        "material_assignments": material_assignments,
         "ports": [
             _object_to_dict(
                 p,
