@@ -348,6 +348,84 @@ def _check_port_configuration(members) -> list[PreflightFinding]:
     return findings
 
 
+def _is_geometry_object(obj: Any) -> bool:
+    if obj is None:
+        return False
+    proxy = getattr(obj, "Proxy", None)
+    proxy_type = str(getattr(proxy, "TYPE", ""))
+    if proxy_type.startswith("OpenEMS_"):
+        return False
+    return hasattr(obj, "Shape")
+
+
+def _geometry_in_analysis(analysis: Any) -> list[Any]:
+    geometry = []
+    for obj in list(getattr(analysis, "Group", [])):
+        if _is_geometry_object(obj):
+            geometry.append(obj)
+    return geometry
+
+
+def _check_material_assignments(analysis: Any, members) -> list[PreflightFinding]:
+    findings: list[PreflightFinding] = []
+    geometry = _geometry_in_analysis(analysis)
+
+    analysis_group = list(getattr(analysis, "Group", []))
+    assignment_map: dict[str, list[Any]] = {}
+
+    for material in members.materials:
+        links = getattr(material, "AssignedGeometry", [])
+        if not isinstance(links, (list, tuple)):
+            continue
+
+        names_in_material = set()
+        for linked in links:
+            linked_name = str(getattr(linked, "Name", "")).strip()
+            if not linked_name or linked_name in names_in_material:
+                continue
+            names_in_material.add(linked_name)
+
+            if linked not in analysis_group or not _is_geometry_object(linked):
+                findings.append(
+                    _finding(
+                        "error",
+                        "material.assignment_link_valid",
+                        f"Material assignment contains stale or invalid linked object '{linked_name}'.",
+                        material,
+                    )
+                )
+                continue
+
+            assignment_map.setdefault(linked_name, []).append(material)
+
+    for obj in geometry:
+        name = str(getattr(obj, "Name", "")).strip()
+        assigned_materials = assignment_map.get(name, [])
+        if len(assigned_materials) == 0:
+            findings.append(
+                _finding(
+                    "error",
+                    "material.geometry_assigned",
+                    f"Geometry '{name}' must be assigned to exactly one material.",
+                    obj,
+                )
+            )
+        elif len(assigned_materials) > 1:
+            material_names = ", ".join(
+                str(getattr(item, "Name", "")) for item in assigned_materials
+            )
+            findings.append(
+                _finding(
+                    "error",
+                    "material.geometry_unique_assignment",
+                    f"Geometry '{name}' is assigned to multiple materials: {material_names}.",
+                    obj,
+                )
+            )
+
+    return findings
+
+
 def run_preflight(analysis: Any) -> list[PreflightFinding]:
     if analysis is None:
         return [
@@ -368,6 +446,7 @@ def run_preflight(analysis: Any) -> list[PreflightFinding]:
     findings.extend(_check_solver_configuration(members))
     findings.extend(_check_excitation(members))
     findings.extend(_check_port_configuration(members))
+    findings.extend(_check_material_assignments(analysis, members))
 
     for unknown in members.unknown:
         findings.append(

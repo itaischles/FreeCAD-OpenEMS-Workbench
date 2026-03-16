@@ -28,6 +28,13 @@ class Analysis:
         self.Group = group
 
 
+class GeoObj:
+    def __init__(self, name):
+        self.Name = name
+        self.Label = name
+        self.Shape = object()
+
+
 def _minimal_valid_analysis():
     sim = Obj(
         "Simulation",
@@ -145,3 +152,42 @@ def test_preflight_requires_span_on_excitation_axis():
     port.PortStopX = 1.0
     findings = run_preflight(analysis)
     assert any(f.check_id == "port.region_excitation_axis_span" for f in findings)
+
+
+def test_preflight_requires_material_assignment_for_geometry():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    analysis.Group.append(GeoObj("GeoA"))
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "material.geometry_assigned" for f in findings)
+
+
+def test_preflight_rejects_stale_material_assignment_links():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    stale = GeoObj("StaleGeo")
+    material = analysis.Group[2]
+    material.AssignedGeometry = [stale]
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "material.assignment_link_valid" for f in findings)
+
+
+def test_preflight_rejects_duplicate_geometry_assignment_across_materials():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    geometry = GeoObj("GeoA")
+    analysis.Group.append(geometry)
+
+    material_a = analysis.Group[2]
+    material_a.AssignedGeometry = [geometry]
+
+    material_b = Obj("Material2", "OpenEMS_Material", AssignedGeometry=[geometry])
+    analysis.Group.append(material_b)
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "material.geometry_unique_assignment" for f in findings)
