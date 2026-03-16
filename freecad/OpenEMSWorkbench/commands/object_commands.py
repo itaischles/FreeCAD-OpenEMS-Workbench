@@ -282,6 +282,20 @@ def _analysis_simulation(analysis):
     return None
 
 
+def _resolve_export_base(analysis) -> str:
+    simulation = _analysis_simulation(analysis)
+    configured = str(getattr(simulation, "OutputDirectory", "") or "").strip() if simulation else ""
+    if configured:
+        return os.path.abspath(configured)
+
+    return os.path.join(
+        App.getUserAppDataDir(),
+        "Mod",
+        "OpenEMSWorkbench",
+        "exports",
+    )
+
+
 class _CreateObjectCommand:
     def __init__(self, command_name: str):
         self.command_name = command_name
@@ -512,17 +526,16 @@ class _ExportDryRunCommand:
 
         ok, findings, summary = _preflight_gate(analysis)
         if not ok:
-            App.Console.PrintError("OpenEMS: Export blocked by preflight errors.\n")
+            App.Console.PrintError(
+                "OpenEMS: Preflight has errors, but continuing export for manual stage sign-off.\n"
+            )
             for line in format_findings(findings):
                 App.Console.PrintMessage(f"OpenEMS Preflight: {line}\n")
-            return
+        elif summary.get("warnings", 0):
+            for line in format_findings(findings):
+                App.Console.PrintMessage(f"OpenEMS Preflight: {line}\n")
 
-        export_base = os.path.join(
-            App.getUserAppDataDir(),
-            "Mod",
-            "OpenEMSWorkbench",
-            "exports",
-        )
+        export_base = _resolve_export_base(analysis)
 
         try:
             result = export_analysis_dry_run(analysis, export_base, str(getattr(doc, "Name", "Document")))
@@ -603,12 +616,7 @@ class _RunSimulationCommand:
             App.Console.PrintError("OpenEMS: No active analysis found.\n")
             return
 
-        export_base = os.path.join(
-            App.getUserAppDataDir(),
-            "Mod",
-            "OpenEMSWorkbench",
-            "exports",
-        )
+        export_base = _resolve_export_base(analysis)
 
         App.Console.PrintMessage("OpenEMS: Running simulation (blocking mode).\n")
         try:
