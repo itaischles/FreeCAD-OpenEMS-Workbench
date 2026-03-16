@@ -527,7 +527,7 @@ class _ExportDryRunCommand:
         ok, findings, summary = _preflight_gate(analysis)
         if not ok:
             App.Console.PrintError(
-                "OpenEMS: Preflight has errors, but continuing export for manual stage sign-off.\n"
+                "OpenEMS: Preflight has errors, but continuing dry-run export.\n"
             )
             for line in format_findings(findings):
                 App.Console.PrintMessage(f"OpenEMS Preflight: {line}\n")
