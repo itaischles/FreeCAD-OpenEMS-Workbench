@@ -14,29 +14,45 @@ Goal: let the next session start fast without scanning the whole repository.
 ## Current Snapshot
 
 - Date: 2026-03-16
-- Current phase (from MVP-plan): Phase 2 (material assignment to geometry)
-- Current commit task (for example: Commit 2.3): Phase 2 planning alignment and scope lock
+- Current phase (from MVP-plan): Phase 3 (export real geometry and materials)
+- Current commit task (for example: Commit 2.3): Phase 3, Commit 3.1 (reader-to-export mapping handoff usage)
 - Status: Ready to implement
 - Branch name: not recorded in handoff yet
-- Last completed commit task: Phase 2 plan rewrite in docs/MVP-plan.md (openEMS-aligned)
-- Next immediate task: implement Phase 2, Commit 2.1 (material assignment properties and persistence)
+- Last completed commit task: Phase 2, Commit 2.5 (documented handoff contract to Phase 3)
+- Next immediate task: implement Phase 3, Commit 3.1 (consume geometry-material assignment mapping in export model flow)
 
 ## Quick Context
 
-- One-paragraph summary of where we are: This session aligned Phase 2 in docs/MVP-plan.md with openEMS material handling. The plan now explicitly defines materials as named properties, geometry assignment to those properties, overlap priority handling, strict preflight requirement of exactly one material per analysis geometry, and a clear Phase 2-to-Phase 3 handoff. Scope for Phase 2 is locked to simple material models (PEC metal or dielectric/general material), with advanced material features deferred. No Phase 2 code implementation has started yet.
+- One-paragraph summary of where we are: Phase 2 implementation is complete through Commit 2.5. Material objects now persist `AssignedGeometry` and `AssignmentPriority`, the material panel supports assign/reassign/unassign with assigned-geometry listing, preflight enforces exactly-one assignment and rejects stale/duplicate links, and export reader already emits assignment-aware fields (`AssignedGeometryNames`, `AssignmentPriority`, `material_assignments`). Tests for assignment flows and restore-style persistence are in place and passing. MVP plan now includes an explicit handoff contract from Phase 2 to Phase 3.
 
 ## Changes Made This Session
 
-- Files changed: docs/MVP-plan.md
-- Main behavior changed: none in code; planning updated so Phase 2 implementation requirements now match openEMS material-property workflow
-- Tests added/updated: none (planning session)
-- Tests run and result: none (planning session)
+- Files changed: docs/MVP-plan.md, freecad/OpenEMSWorkbench/model/__init__.py, freecad/OpenEMSWorkbench/objects/material_feature.py, freecad/OpenEMSWorkbench/gui/task_panels/material_panel.py, freecad/OpenEMSWorkbench/exporter/document_reader.py, freecad/OpenEMSWorkbench/validation/preflight.py, tests/unit/test_material_feature.py, tests/unit/test_material_panel_logic.py, tests/unit/test_exporter_document_reader.py, tests/unit/test_preflight.py
+- Main behavior changed: material assignment is now persisted, editable in material panel, validated in preflight, and exported through reader handoff data
+- Tests added/updated: assignment property, assignment flow helpers, export reader assignment handoff, preflight assignment rules, restore lifecycle persistence
+- Tests run and result: focused Phase 2 test set passed (latest run: 22 passed)
 
 ## Completed Tasks
 
-- Phase 2 section in docs/MVP-plan.md rewritten to align with openEMS material model and assignment rules.
-- Commit-sized tasks for Phase 2 were updated to include persistence model, assignment UI actions, strict preflight checks, assignment lifecycle tests, and Phase 3 handoff contract.
-- Explicit Phase 2 out-of-scope list added for advanced material features and final CSX/openEMS command emission.
+- Commit 2.1 completed: persistent material assignment properties and export-reader handoff metadata added.
+- Commit 2.2 completed: material task panel controls for assign/unassign/list implemented.
+- Commit 2.3 completed: preflight assignment checks implemented (missing assignment, stale links, duplicates).
+- Commit 2.4 completed: tests added for assign/reassign/unassign flows and restore-style persistence.
+- Commit 2.5 completed: Phase 2 to Phase 3 handoff contract documented in docs/session-handoff.md.
+
+## Phase 2 To Phase 3 Handoff Contract
+
+- Material objects persist assignment data in FreeCAD using `AssignedGeometry` (link list) and `AssignmentPriority` (non-negative integer).
+- Material panel supports assign, reassign, and unassign operations over analysis geometry and displays assigned geometry.
+- Preflight enforces assignment validity before export/run:
+	- Every analysis geometry must be assigned to exactly one material.
+	- Stale or invalid assignment links are errors.
+	- Duplicate assignment of one geometry to multiple materials is an error.
+- Export reader produces assignment-ready data for Phase 3:
+	- `materials[*].AssignedGeometryNames`
+	- `materials[*].AssignmentPriority`
+	- `material_assignments[*]` with `geometry_name`, `material_name`, and `priority`
+- Phase 3 should consume this handoff data directly when binding exported geometry primitives to material definitions.
 
 ## Decisions And Assumptions
 
@@ -53,21 +69,21 @@ Goal: let the next session start fast without scanning the whole repository.
 
 ## Open Questions
 
-- None for starting Commit 2.1 implementation
+- None
 
 ## Next Session Startup Prompt
 
 Paste and edit this when opening a new chat session:
 
-"Read docs/session-handoff.md and docs/MVP-plan.md first. Continue from Phase 2, Commit 2.1 without rescoping. First summarize current status in 6 bullets max, then implement persistent geometry-to-material assignment properties on material objects and add/update unit tests for persistence behavior."
+"Read docs/session-handoff.md and docs/MVP-plan.md first. Continue from Phase 3, Commit 3.1 without rescoping. First summarize current status in 6 bullets max, then wire Phase 2 assignment handoff data into the export model so each exported geometry is bound to its assigned material and priority." 
 
 ## Workbench deployment
 The workbench is written in the current workspace which is only for development. It needs to be transferred at the end of each coding cycle to the FreeCAD\MOD folder in order to be able to test it in FreeCAD. A deployment tool is located in this workspace under tools\deploy_workbench.py.
 
 ## Definition Of Done For Current Commit Task
 
-- [ ] Code changes completed
-- [ ] Unit tests updated
-- [ ] Relevant tests pass
+- [x] Code changes completed
+- [x] Unit tests updated
+- [x] Relevant tests pass
 - [x] Documentation updated (if needed)
 - [x] Handoff file updated
