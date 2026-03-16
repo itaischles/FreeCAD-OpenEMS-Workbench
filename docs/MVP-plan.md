@@ -65,31 +65,48 @@ Commit-sized tasks:
 
 ### Phase 2: add material assignment to geometry
 
-Materials already exist as objects, but the workbench still needs a real way to assign them to FreeCAD solids that belong to the analysis.
+Materials already exist as objects, but the workbench still needs a real assignment model that matches openEMS usage.
+
+In openEMS, material definitions and geometry are separate:
+
+- You create a named property (for example PEC metal or dielectric material).
+- You assign geometry primitives to that property.
+- Overlap is resolved by primitive priority.
+
+This phase adds the FreeCAD-side assignment workflow and data, but does not yet generate final openEMS script commands.
 
 This phase should:
 
-- Let the user assign one material to selected geometry objects.
-- Store that assignment in a stable way in the FreeCAD document.
-- Restore the assignment correctly after saving and reopening.
-- Keep the workflow simple for the user.
+- Let the user assign exactly one material to each analysis geometry object.
+- Keep Phase 2 material scope simple: PEC metal or dielectric/general material.
+- Store assignments in a stable way in the FreeCAD document.
+- Restore assignments correctly after saving and reopening.
+- Carry assignment and priority metadata forward for Phase 3 export.
 
 Recommended simple workflow:
 
-- The user selects one or more geometry objects.
-- The user opens or edits a material object.
-- The user assigns the selected geometry to that material.
+- The user selects one or more geometry objects in the analysis.
+- The user opens or creates a material object.
+- The user assigns the current selection to that material.
+- The user can unassign or reassign geometry as needed.
+- The material panel shows which geometry is currently assigned.
 
 Reason:
 
-Without this step, the exported simulation does not know what part is metal, dielectric, PEC, and so on.
+Without this step, export cannot know which geometry is PEC metal and which geometry is dielectric. openEMS expects geometry to be attached to named properties, so assignment must be explicit before real export can work.
 
 Commit-sized tasks:
 
-1. Commit 2.1: Add material assignment properties on material objects and persist them in the FreeCAD document.
-2. Commit 2.2: Add task panel controls for assigning currently selected geometry to a material.
-3. Commit 2.3: Add validation checks for missing or invalid material assignments.
-4. Commit 2.4: Add tests for save, reopen, and assignment persistence.
+1. Commit 2.1: Add persistent geometry-link assignment properties on material objects, including metadata needed for export handoff.
+2. Commit 2.2: Add task panel controls to assign selected geometry, unassign geometry, and list assigned geometry for a material.
+3. Commit 2.3: Add preflight checks so each analysis geometry has exactly one material assignment, with no stale links and no duplicate assignments across materials.
+4. Commit 2.4: Add tests for assign/reassign/unassign flows and save/reopen persistence.
+5. Commit 2.5: Add a documented handoff contract from Phase 2 to Phase 3 for geometry-to-material mapping and priority usage.
+
+Out of scope for this phase:
+
+- Advanced openEMS material options (for example sigma, anisotropy vectors, and spatial weighting functions).
+- Final CSX/openEMS command emission (implemented in Phase 3).
 
 ### Phase 3: export real geometry and materials
 
