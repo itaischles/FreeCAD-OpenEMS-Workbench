@@ -58,51 +58,6 @@ Run:
 
 Expected result: `OK`.
 
-## 6) Link runtime in FreeCAD workbench
+## 6) Next steps
 
-1. Open FreeCAD.
-2. Switch to OpenEMS workbench.
-3. Run `Configure Runtime...`.
-4. Select your Python executable.
-5. Run `Validate Runtime`.
-
-Expected result: runtime validation passes.
-
-## 7) Run a test simulation
-
-1. Create a valid analysis (Simulation, Grid, Material, Boundary, Port).
-2. Set Simulation to blocking mode.
-3. Run `Run Simulation`.
-4. Check Report view for script path and stdout/stderr log paths.
-
-## Troubleshooting
-
-### Validate Runtime times out
-
-1. Confirm `OPENEMS_INSTALL_DIR` is set to `C:\openEMS`.
-2. Restart FreeCAD after setting environment variables.
-3. Confirm selected Python matches the wheel version (cp313 vs cp314).
-
-### No module named openEMS
-
-1. Install the openEMS and csxcad wheel files into the same Python selected in Configure Runtime.
-2. Verify with a direct Python import test.
-
-### DLL load failed while importing CSXCAD
-
-1. Confirm `OPENEMS_INSTALL_DIR` points to openEMS root.
-2. Confirm that folder contains `openEMS.dll`, `CSXCAD.dll`, and related runtime DLLs.
-3. Restart FreeCAD after environment changes.
-
-### openEMS.exe works but Run Simulation fails
-
-This workbench run mode executes a Python script. Use a Python interpreter that can import openEMS and CSXCAD, not openEMS.exe, for SolverExecutable.
-
-## Notes for future UX improvements
-
-The ideal future flow is fully guided onboarding in FreeCAD:
-
-1. Auto-detect openEMS install.
-2. Auto-install wheel packages when needed.
-3. One-click runtime setup validation.
-4. No manual path handling for typical users.
+This manual is still incomplete because the workbench is not fully implemented yet. Next steps will be written once workbench is at first MVP checkpoint.
