@@ -76,3 +76,39 @@ def test_find_analysis_for_member_returns_matching_analysis():
 
     found = _find_analysis_for_member(doc, material)
     assert found is analysis
+
+
+def test_assign_reassign_unassign_flow_helpers():
+    from OpenEMSWorkbench.gui.task_panels.material_panel import (
+        _filter_assignable_selection,
+        _merge_unique_by_name,
+        _remove_by_name,
+    )
+
+    geo_a = Obj("GeoA", has_shape=True)
+    geo_b = Obj("GeoB", has_shape=True)
+    geo_c = Obj("GeoC", has_shape=True)
+    analysis = Analysis([geo_a, geo_b, geo_c])
+
+    # Assign: material A gets GeoA and GeoB from user selection.
+    material_a_assigned = []
+    selection = [geo_a, geo_b]
+    material_a_assigned = _merge_unique_by_name(
+        material_a_assigned,
+        _filter_assignable_selection(selection, analysis),
+    )
+    assert [obj.Name for obj in material_a_assigned] == ["GeoA", "GeoB"]
+
+    # Reassign: user assigns GeoB to material B, then removes it from material A.
+    material_b_assigned = []
+    material_b_assigned = _merge_unique_by_name(
+        material_b_assigned,
+        _filter_assignable_selection([geo_b], analysis),
+    )
+    material_a_assigned = _remove_by_name(material_a_assigned, [geo_b])
+    assert [obj.Name for obj in material_a_assigned] == ["GeoA"]
+    assert [obj.Name for obj in material_b_assigned] == ["GeoB"]
+
+    # Unassign: remove the remaining geometry from material A.
+    material_a_assigned = _remove_by_name(material_a_assigned, [geo_a])
+    assert material_a_assigned == []

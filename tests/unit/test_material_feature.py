@@ -54,3 +54,30 @@ def test_material_proxy_ensure_properties_is_idempotent():
     assert obj.AssignmentPriority == 7
     assert list(obj._props).count("AssignedGeometry") == 1
     assert list(obj._props).count("AssignmentPriority") == 1
+
+
+class _GeoObj:
+    def __init__(self, name):
+        self.Name = name
+        self.Label = name
+        self.Shape = object()
+
+
+def test_material_proxy_restore_keeps_assignment_values():
+    from OpenEMSWorkbench.objects.material_feature import OpenEMSMaterialProxy
+
+    geo_a = _GeoObj("GeoA")
+    geo_b = _GeoObj("GeoB")
+
+    obj = FakeObject()
+    proxy = OpenEMSMaterialProxy()
+    proxy.ensure_properties(obj)
+
+    obj.AssignedGeometry = [geo_a, geo_b]
+    obj.AssignmentPriority = 11
+
+    # Simulate FreeCAD document reopen lifecycle callback.
+    proxy.onDocumentRestored(obj)
+
+    assert [item.Name for item in obj.AssignedGeometry] == ["GeoA", "GeoB"]
+    assert obj.AssignmentPriority == 11
