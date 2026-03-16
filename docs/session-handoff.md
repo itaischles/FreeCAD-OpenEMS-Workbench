@@ -61,6 +61,9 @@ Paste and edit this when opening a new chat session:
 
 "Read docs/session-handoff.md and docs/MVP-plan.md first. Continue from Phase 2, Commit 2.1 without rescoping. First summarize current status in 6 bullets max, then implement persistent geometry-to-material assignment properties on material objects and add/update unit tests for persistence behavior."
 
+## Workbench deployment
+The workbench is written in the current workspace which is only for development. It needs to be transferred at the end of each coding cycle to the FreeCAD\MOD folder in order to be able to test it in FreeCAD. A deployment tool is located in this workspace under tools\deploy_workbench.py.
+
 ## Definition Of Done For Current Commit Task
 
 - [ ] Code changes completed
