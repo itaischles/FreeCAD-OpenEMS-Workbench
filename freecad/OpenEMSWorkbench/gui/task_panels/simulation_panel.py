@@ -16,7 +16,6 @@ class SimulationTaskPanel(BaseObjectTaskPanel):
             "type": "enum",
             "choices": ["Cartesian", "Cylindrical"],
         },
-        {"name": "DeltaUnit", "label": "Delta Unit (m)", "type": "float"},
         {"name": "NumberOfTimeSteps", "label": "Number Of Time Steps", "type": "int"},
         {"name": "EndCriteria", "label": "End Criteria", "type": "float"},
         {

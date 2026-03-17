@@ -2,6 +2,7 @@ from __future__ import annotations
 
 try:
     from model import COORDINATE_SYSTEMS, DEFAULTS, EXCITATION_TYPES
+    from utils.unit_contract import canonical_delta_unit_meters, is_supported_delta_unit
     from objects.base_feature import (
         FeatureProxyBase,
         ViewProviderBase,
@@ -10,6 +11,10 @@ try:
     )
 except ImportError:
     from OpenEMSWorkbench.model import COORDINATE_SYSTEMS, DEFAULTS, EXCITATION_TYPES
+    from OpenEMSWorkbench.utils.unit_contract import (
+        canonical_delta_unit_meters,
+        is_supported_delta_unit,
+    )
     from OpenEMSWorkbench.objects.base_feature import (
         FeatureProxyBase,
         ViewProviderBase,
@@ -20,6 +25,16 @@ except ImportError:
 
 class OpenEMSSimulationProxy(FeatureProxyBase):
     TYPE = "OpenEMS_Simulation"
+
+    def _enforce_delta_unit(self, obj) -> None:
+        expected = canonical_delta_unit_meters()
+        current = getattr(obj, "DeltaUnit", expected)
+        if is_supported_delta_unit(current, expected_delta_unit=expected):
+            return
+        try:
+            obj.DeltaUnit = expected
+        except Exception:
+            pass
 
     def ensure_properties(self, obj):
         add_property_if_missing(
@@ -138,6 +153,11 @@ class OpenEMSSimulationProxy(FeatureProxyBase):
             EXCITATION_TYPES,
             DEFAULTS["simulation"]["excitation_type"],
         )
+        self._enforce_delta_unit(obj)
+
+    def onChanged(self, obj, prop: str) -> None:  # noqa: N802 - FreeCAD API
+        if prop == "DeltaUnit":
+            self._enforce_delta_unit(obj)
 
 
 class OpenEMSSimulationViewProvider(ViewProviderBase):

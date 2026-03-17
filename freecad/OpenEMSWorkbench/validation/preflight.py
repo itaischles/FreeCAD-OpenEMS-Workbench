@@ -9,6 +9,19 @@ try:
 except ImportError:
     from OpenEMSWorkbench.validation.member_collection import collect_members
 
+try:
+    from utils.unit_contract import (
+        DEFAULT_LENGTH_UNIT_NAME,
+        canonical_delta_unit_meters,
+        is_supported_delta_unit,
+    )
+except ImportError:
+    from OpenEMSWorkbench.utils.unit_contract import (
+        DEFAULT_LENGTH_UNIT_NAME,
+        canonical_delta_unit_meters,
+        is_supported_delta_unit,
+    )
+
 
 @dataclass
 class PreflightFinding:
@@ -247,6 +260,31 @@ def _check_excitation(members) -> list[PreflightFinding]:
     return findings
 
 
+def _check_unit_contract(members) -> list[PreflightFinding]:
+    findings: list[PreflightFinding] = []
+    if not members.simulations:
+        return findings
+
+    sim = members.simulations[0]
+    expected_delta_unit = canonical_delta_unit_meters()
+    unit_name = DEFAULT_LENGTH_UNIT_NAME
+    delta_unit = getattr(sim, "DeltaUnit", expected_delta_unit)
+    if not is_supported_delta_unit(delta_unit, expected_delta_unit=expected_delta_unit):
+        findings.append(
+            _finding(
+                "error",
+                "simulation.delta_unit_contract",
+                (
+                    f"DeltaUnit must match current FreeCAD length unit '{unit_name}' "
+                    f"({expected_delta_unit} m per unit) so openEMS reads the same units shown in FreeCAD."
+                ),
+                sim,
+            )
+        )
+
+    return findings
+
+
 def _check_port_configuration(members) -> list[PreflightFinding]:
     findings: list[PreflightFinding] = []
     valid_directions = {"x", "y", "z", "+x", "-x", "+y", "-y", "+z", "-z"}
@@ -444,6 +482,7 @@ def run_preflight(analysis: Any) -> list[PreflightFinding]:
     findings.extend(_check_dumpbox_frequency(members))
     findings.extend(_check_output_directory(members))
     findings.extend(_check_solver_configuration(members))
+    findings.extend(_check_unit_contract(members))
     findings.extend(_check_excitation(members))
     findings.extend(_check_port_configuration(members))
     findings.extend(_check_material_assignments(analysis, members))

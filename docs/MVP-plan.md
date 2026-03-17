@@ -156,7 +156,6 @@ Commit-sized tasks:
 4. Commit 4.4: Export per-face boundary settings from the simulation box into real openEMS boundary commands in the generated Python script.
 5. Commit 4.5: Enforce one explicit unit contract so the units shown in FreeCAD are the exact same units openEMS reads from the exported Python input (no hidden scale mismatch), and apply this consistently in geometry, boundary coordinates, exporter, and run pipeline.
 6. Commit 4.6: Migrate legacy boundary/simulation-box data to the new unified simulation-box object model, then remove legacy separate boundary/simulation-box objects, UI paths, and exporter/preflight dependencies.
-7. Commit 4.7: Add tests for box generation defaults, face boundary persistence/export mapping, legacy-migration/removal behavior, and unit-conversion consistency (including millimeter-based input geometry).
 
 ### Phase 5: connect mesh to the real model extent
 

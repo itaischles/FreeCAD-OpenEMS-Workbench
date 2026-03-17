@@ -362,3 +362,19 @@ def test_document_reader_falls_back_to_legacy_boundary_when_no_sim_box():
     assert boundary["PMLCells"] == 9
 
 
+def test_document_reader_normalizes_delta_unit_to_unit_contract():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", DeltaUnit=1.0),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            OpenEMSObj("Bnd", "OpenEMS_Boundary"),
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    assert extracted["simulation"]["DeltaUnit"] == 1e-3
+    assert extracted["simulation"]["FreeCADLengthUnitName"] == "mm"
+
+

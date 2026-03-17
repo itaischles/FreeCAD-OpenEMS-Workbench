@@ -2,6 +2,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+try:
+    from utils.unit_contract import (
+        coerce_delta_unit,
+        detect_freecad_length_unit_name,
+        mm_to_model_unit_scale,
+    )
+except ImportError:
+    from OpenEMSWorkbench.utils.unit_contract import (
+        coerce_delta_unit,
+        detect_freecad_length_unit_name,
+        mm_to_model_unit_scale,
+    )
+
 
 def _as_float(value, default: float) -> float:
     try:
@@ -51,8 +64,9 @@ def _grid_lines_from_model(model) -> tuple[list[float], list[float], list[float]
     max_res = _as_float(grid.get("MaxResolution", 5.0), 5.0)
     if max_res < base:
         max_res = base
-    delta_unit = _as_float(sim.get("DeltaUnit", 1e-3), 1e-3)
-    axis = _axis_lines(base, max_res)
+    delta_unit = coerce_delta_unit(sim.get("DeltaUnit"))
+    scale = mm_to_model_unit_scale(delta_unit)
+    axis = [round(value * scale, 9) for value in _axis_lines(base, max_res)]
     return axis, axis, axis, delta_unit
 
 
@@ -64,6 +78,10 @@ def _vec3(values, default: list[float]) -> list[float]:
         _as_float(values[1], default[1]),
         _as_float(values[2], default[2]),
     ]
+
+
+def _scale_vec3(values: list[float], scale: float) -> list[float]:
+    return [round(float(values[0]) * scale, 12), round(float(values[1]) * scale, 12), round(float(values[2]) * scale, 12)]
 
 
 def _safe_symbol(value: str) -> str:
@@ -104,6 +122,14 @@ def generate_openems_script(
     lines.append("")
     lines.append("CSX = CSXCAD.ContinuousStructure()")
     x_lines, y_lines, z_lines, delta_unit = _grid_lines_from_model(model)
+    model_unit_name = str((model.simulation or {}).get("FreeCADLengthUnitName") or "").strip()
+    if not model_unit_name:
+        model_unit_name = detect_freecad_length_unit_name()
+    model_scale = mm_to_model_unit_scale(delta_unit)
+    lines.append(
+        f"# Unit contract: coordinates are exported in FreeCAD unit '{model_unit_name}' "
+        f"with SetDeltaUnit={delta_unit} meter per unit."
+    )
     lines.append("grid = CSX.GetGrid()")
     lines.append(f"grid.SetDeltaUnit({delta_unit})")
     lines.append(f"grid.AddLine('x', {x_lines})")
@@ -172,8 +198,8 @@ def generate_openems_script(
 
     for geo in sorted(model.geometries, key=lambda item: item.object_name):
         if geo.primitive == "box":
-            start = _vec3(geo.params.get("start"), [0.0, 0.0, 0.0])
-            stop = _vec3(geo.params.get("stop"), [1.0, 1.0, 1.0])
+            start = _scale_vec3(_vec3(geo.params.get("start"), [0.0, 0.0, 0.0]), model_scale)
+            stop = _scale_vec3(_vec3(geo.params.get("stop"), [1.0, 1.0, 1.0]), model_scale)
             material_name = str(getattr(geo, "assigned_material_name", "") or "").strip()
             prop_var = material_vars.get(material_name, "_phase33_unassigned_prop")
             priority = _as_int(getattr(geo, "assignment_priority", 0), 0)
@@ -182,9 +208,9 @@ def generate_openems_script(
                 f"# BOX {geo.object_name}: start={start} stop={stop}"
             )
         elif geo.primitive == "cylinder":
-            base = _vec3(geo.params.get("base"), [0.0, 0.0, 0.0])
-            radius = _as_float(geo.params.get("radius"), 1.0)
-            height = _as_float(geo.params.get("height"), 1.0)
+            base = _scale_vec3(_vec3(geo.params.get("base"), [0.0, 0.0, 0.0]), model_scale)
+            radius = round(_as_float(geo.params.get("radius"), 1.0) * model_scale, 12)
+            height = round(_as_float(geo.params.get("height"), 1.0) * model_scale, 12)
             top = [base[0], base[1], base[2] + height]
             material_name = str(getattr(geo, "assigned_material_name", "") or "").strip()
             prop_var = material_vars.get(material_name, "_phase33_unassigned_prop")
@@ -211,14 +237,14 @@ def generate_openems_script(
             excite = 1.0 if bool(port.get("Excite", False)) else 0.0
             direction, reverse = _normalize_direction(port.get("PropagationDirection"))
             start = [
-                _as_float(port.get("PortStartX", 0.0), 0.0),
-                _as_float(port.get("PortStartY", 0.0), 0.0),
-                _as_float(port.get("PortStartZ", 0.0), 0.0),
+                round(_as_float(port.get("PortStartX", 0.0), 0.0) * model_scale, 12),
+                round(_as_float(port.get("PortStartY", 0.0), 0.0) * model_scale, 12),
+                round(_as_float(port.get("PortStartZ", 0.0), 0.0) * model_scale, 12),
             ]
             stop = [
-                _as_float(port.get("PortStopX", 1.0), 1.0),
-                _as_float(port.get("PortStopY", 0.0), 0.0),
-                _as_float(port.get("PortStopZ", 0.0), 0.0),
+                round(_as_float(port.get("PortStopX", 1.0), 1.0) * model_scale, 12),
+                round(_as_float(port.get("PortStopY", 0.0), 0.0) * model_scale, 12),
+                round(_as_float(port.get("PortStopZ", 0.0), 0.0) * model_scale, 12),
             ]
             if reverse:
                 start, stop = stop, start

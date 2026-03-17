@@ -20,6 +20,19 @@ try:
 except ImportError:
     from OpenEMSWorkbench.validation.member_collection import collect_members
 
+try:
+    from utils.unit_contract import (
+        DEFAULT_LENGTH_UNIT_NAME,
+        canonical_delta_unit_meters,
+        coerce_delta_unit,
+    )
+except ImportError:
+    from OpenEMSWorkbench.utils.unit_contract import (
+        DEFAULT_LENGTH_UNIT_NAME,
+        canonical_delta_unit_meters,
+        coerce_delta_unit,
+    )
+
 
 def _object_to_dict(obj, fields: list[str]) -> dict:
     data = {"name": getattr(obj, "Name", ""), "label": getattr(obj, "Label", "")}
@@ -408,9 +421,8 @@ def read_analysis_for_export(analysis) -> dict:
         key=lambda item: (item["geometry_name"], item["material_name"])
     )
 
-    return {
-        "analysis_name": str(getattr(analysis, "Name", "analysis")),
-        "simulation": _object_to_dict(
+    simulation_data = (
+        _object_to_dict(
             simulation,
             [
                 "SolverName",
@@ -429,7 +441,20 @@ def read_analysis_for_export(analysis) -> dict:
             ],
         )
         if simulation is not None
-        else {},
+        else {}
+    )
+
+    if simulation_data:
+        export_delta_unit = canonical_delta_unit_meters()
+        simulation_data["DeltaUnit"] = coerce_delta_unit(
+            simulation_data.get("DeltaUnit"),
+            fallback_delta_unit=export_delta_unit,
+        )
+        simulation_data["FreeCADLengthUnitName"] = DEFAULT_LENGTH_UNIT_NAME
+
+    return {
+        "analysis_name": str(getattr(analysis, "Name", "analysis")),
+        "simulation": simulation_data,
         "simulation_box": simulation_box,
         "grid": _object_to_dict(
             grid,

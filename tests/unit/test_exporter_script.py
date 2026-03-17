@@ -164,3 +164,45 @@ def test_script_generator_uses_unassigned_fallback_for_missing_binding(tmp_path)
 
     assert "_phase33_unassigned_prop = CSX.AddMaterial('_phase33_unassigned')" in text
     assert "_phase33_unassigned_prop.AddBox([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], priority=4)" in text
+
+
+def test_script_generator_normalizes_delta_unit_to_mm_contract(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={"DeltaUnit": 1.0},
+        grid={"name": "Grid"},
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_units.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "grid.SetDeltaUnit(0.001)" in text
+    assert "Unit contract:" in text
+
+
+def test_script_generator_scales_geometry_to_selected_delta_unit(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel, GeometryEntry
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={"DeltaUnit": 1.0, "FreeCADLengthUnitName": "in"},
+        grid={"name": "Grid"},
+        geometries=[
+            GeometryEntry(
+                "B",
+                "Box",
+                "box",
+                {"start": [0, 0, 0], "stop": [1000, 1000, 1000]},
+            )
+        ],
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_scaled.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "grid.SetDeltaUnit(0.001)" in text
+    assert "AddBox([0.0, 0.0, 0.0], [1000.0, 1000.0, 1000.0], priority=0)" in text

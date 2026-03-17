@@ -191,3 +191,14 @@ def test_preflight_rejects_duplicate_geometry_assignment_across_materials():
 
     findings = run_preflight(analysis)
     assert any(f.check_id == "material.geometry_unique_assignment" for f in findings)
+
+
+def test_preflight_enforces_delta_unit_contract():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    simulation = analysis.Group[0]
+    simulation.DeltaUnit = 1.0
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "simulation.delta_unit_contract" for f in findings)
