@@ -27,7 +27,7 @@ class OpenEMSGridProxy(FeatureProxyBase):
             "App::PropertyEnumeration",
             "CoordinateSystem",
             "Grid",
-            "Grid coordinate system.",
+            "Grid coordinate system used for mesh generation.",
             DEFAULTS["grid"]["coordinate_system"],
         )
         set_enum_choices(
@@ -39,34 +39,42 @@ class OpenEMSGridProxy(FeatureProxyBase):
         add_property_if_missing(
             obj,
             "App::PropertyFloat",
-            "BaseResolution",
+            "MeshBaseStep",
             "Grid",
-            "Base mesh resolution.",
-            DEFAULTS["grid"]["base_resolution"],
+            "Base mesh step size in model units.",
+            DEFAULTS["grid"]["mesh_base_step"],
         )
         add_property_if_missing(
             obj,
             "App::PropertyFloat",
-            "MaxResolution",
+            "MeshMaxStep",
             "Grid",
-            "Maximum mesh resolution.",
-            DEFAULTS["grid"]["max_resolution"],
+            "Maximum mesh step size in model units.",
+            DEFAULTS["grid"]["mesh_max_step"],
         )
         add_property_if_missing(
             obj,
             "App::PropertyFloat",
-            "GradingFactor",
+            "MeshGrowthRate",
             "Grid",
-            "Mesh grading factor.",
-            DEFAULTS["grid"]["grading_factor"],
+            "Mesh growth rate between neighboring steps.",
+            DEFAULTS["grid"]["mesh_growth_rate"],
         )
         add_property_if_missing(
             obj,
             "App::PropertyBool",
-            "AutoSmooth",
+            "MeshAutoSmooth",
             "Grid",
             "Apply automatic smoothing to generated lines.",
-            DEFAULTS["grid"]["auto_smooth"],
+            DEFAULTS["grid"]["mesh_auto_smooth"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyInteger",
+            "MeshPreviewLineCap",
+            "Grid",
+            "Maximum mesh lines per axis for 3D preview rendering.",
+            DEFAULTS["grid"]["mesh_preview_line_cap"],
         )
 
 

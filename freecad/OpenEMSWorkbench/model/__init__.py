@@ -50,10 +50,11 @@ DEFAULTS = {
 	},
 	"grid": {
 		"coordinate_system": "Cartesian",
-		"base_resolution": 1.0,
-		"max_resolution": 5.0,
-		"grading_factor": 1.3,
-		"auto_smooth": True,
+		"mesh_base_step": 1.0,
+		"mesh_max_step": 5.0,
+		"mesh_growth_rate": 1.3,
+		"mesh_auto_smooth": True,
+		"mesh_preview_line_cap": 96,
 	},
 	"dumpbox": {
 		"dump_type": "EField",

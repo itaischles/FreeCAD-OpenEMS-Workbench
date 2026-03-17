@@ -514,7 +514,14 @@ def read_analysis_for_export(analysis) -> dict:
         "simulation_box": simulation_box,
         "grid": _object_to_dict(
             grid,
-            ["CoordinateSystem", "BaseResolution", "MaxResolution", "GradingFactor", "AutoSmooth"],
+            [
+                "CoordinateSystem",
+                "MeshBaseStep",
+                "MeshMaxStep",
+                "MeshGrowthRate",
+                "MeshAutoSmooth",
+                "MeshPreviewLineCap",
+            ],
         )
         if grid is not None
         else {},

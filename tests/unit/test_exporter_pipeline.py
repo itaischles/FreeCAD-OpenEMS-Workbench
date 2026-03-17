@@ -79,6 +79,8 @@ def test_pipeline_generates_script_and_stl(tmp_path):
     script_text = Path(result["paths"]["script"]).read_text(encoding="utf-8")
     assert "AddBox(" in script_text
     assert "# POLYHEDRON GeoComplex" in script_text
+    assert "grid.AddLine('x', [0.0, 1.0])" in script_text
+    assert "grid.AddLine('y', [0.0, 1.0, 2.0])" in script_text
 
     stl_dir = Path(result["paths"]["stl_dir"])
     assert (stl_dir / "GeoComplex.stl").exists()

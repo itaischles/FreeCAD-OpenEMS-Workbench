@@ -41,21 +41,84 @@ def _active_scene_graph():
 	return active_view.getSceneGraph()
 
 
+def _sample_axis(values: tuple[float, ...], max_count: int) -> tuple[float, ...]:
+	if max_count <= 0:
+		return tuple()
+	if len(values) <= max_count:
+		return tuple(values)
+
+	last_index = len(values) - 1
+	if max_count == 1:
+		return (values[0],)
+
+	indices: list[int] = []
+	for idx in range(max_count):
+		position = round((idx * last_index) / (max_count - 1))
+		indices.append(int(position))
+
+	unique_indices = sorted(set(indices))
+	if unique_indices[0] != 0:
+		unique_indices.insert(0, 0)
+	if unique_indices[-1] != last_index:
+		unique_indices.append(last_index)
+
+	return tuple(values[index] for index in unique_indices)
+
+
 def _build_cartesian_segments(mesh: MeshLines) -> list[list[tuple[float, float, float]]]:
-	if not mesh.x or not mesh.y:
+	if not mesh.x or not mesh.y or not mesh.z:
 		return []
 	x_min, x_max = mesh.x[0], mesh.x[-1]
 	y_min, y_max = mesh.y[0], mesh.y[-1]
+	z_min, z_max = mesh.z[0], mesh.z[-1]
+	x_mid = 0.5 * (x_min + x_max)
+	y_mid = 0.5 * (y_min + y_max)
+	z_mid = 0.5 * (z_min + z_max)
+
+	# Dense meshes are decimated deterministically for readability, but keep
+	# enough lines so resolution changes remain clearly visible to users.
+	preview_cap = max(4, int(getattr(mesh, "preview_line_cap", 96)))
+	x_lines = _sample_axis(mesh.x, preview_cap)
+	y_lines = _sample_axis(mesh.y, preview_cap)
+	z_lines = _sample_axis(mesh.z, preview_cap)
 
 	segments: list[list[tuple[float, float, float]]] = []
-	for y_value in mesh.y:
-		segments.append([(x_min, y_value, 0.0), (x_max, y_value, 0.0)])
-	for x_value in mesh.x:
-		segments.append([(x_value, y_min, 0.0), (x_value, y_max, 0.0)])
-	if mesh.z:
-		z_min, z_max = mesh.z[0], mesh.z[-1]
-		for x_value in mesh.x[:: max(1, len(mesh.x) // 8)]:
-			segments.append([(x_value, 0.0, z_min), (x_value, 0.0, z_max)])
+
+	# XY plane at simulation mid-height.
+	for y_value in y_lines:
+		segments.append([(x_min, y_value, z_mid), (x_max, y_value, z_mid)])
+	for x_value in x_lines:
+		segments.append([(x_value, y_min, z_mid), (x_value, y_max, z_mid)])
+
+	# XZ plane at simulation mid-depth.
+	for z_value in z_lines:
+		segments.append([(x_min, y_mid, z_value), (x_max, y_mid, z_value)])
+	for x_value in x_lines:
+		segments.append([(x_value, y_mid, z_min), (x_value, y_mid, z_max)])
+
+	# YZ plane at simulation mid-width.
+	for z_value in z_lines:
+		segments.append([(x_mid, y_min, z_value), (x_mid, y_max, z_value)])
+	for y_value in y_lines:
+		segments.append([(x_mid, y_value, z_min), (x_mid, y_value, z_max)])
+
+	# Add box edges for 3D context.
+	segments.extend(
+		[
+			[(x_min, y_min, z_min), (x_max, y_min, z_min)],
+			[(x_min, y_max, z_min), (x_max, y_max, z_min)],
+			[(x_min, y_min, z_max), (x_max, y_min, z_max)],
+			[(x_min, y_max, z_max), (x_max, y_max, z_max)],
+			[(x_min, y_min, z_min), (x_min, y_max, z_min)],
+			[(x_max, y_min, z_min), (x_max, y_max, z_min)],
+			[(x_min, y_min, z_max), (x_min, y_max, z_max)],
+			[(x_max, y_min, z_max), (x_max, y_max, z_max)],
+			[(x_min, y_min, z_min), (x_min, y_min, z_max)],
+			[(x_max, y_min, z_min), (x_max, y_min, z_max)],
+			[(x_min, y_max, z_min), (x_min, y_max, z_max)],
+			[(x_max, y_max, z_min), (x_max, y_max, z_max)],
+		]
+	)
 	return segments
 
 
@@ -90,6 +153,29 @@ def _build_segments(mesh: MeshLines) -> list[list[tuple[float, float, float]]]:
 	if mesh.coordinate_system == "Cylindrical":
 		return _build_cylindrical_segments(mesh)
 	return _build_cartesian_segments(mesh)
+
+
+def _preview_diagnostics(mesh: MeshLines) -> str:
+	if mesh.coordinate_system == "Cartesian":
+		preview_cap = max(4, int(getattr(mesh, "preview_line_cap", 96)))
+		sampled_x = len(_sample_axis(mesh.x, preview_cap))
+		sampled_y = len(_sample_axis(mesh.y, preview_cap))
+		sampled_z = len(_sample_axis(mesh.z, preview_cap))
+		return (
+			f"cap={preview_cap}, raw(x/y/z)={len(mesh.x)}/{len(mesh.y)}/{len(mesh.z)}, "
+			f"shown(x/y/z)={sampled_x}/{sampled_y}/{sampled_z}"
+		)
+
+	if mesh.coordinate_system == "Cylindrical":
+		preview_cap = max(4, int(getattr(mesh, "preview_line_cap", 96)))
+		sampled_radial = len(_sample_axis(mesh.radial, preview_cap))
+		sampled_z = len(_sample_axis(mesh.z, preview_cap))
+		return (
+			f"cap={preview_cap}, raw(radial/z)={len(mesh.radial)}/{len(mesh.z)}, "
+			f"shown(radial/z)={sampled_radial}/{sampled_z}"
+		)
+
+	return ""
 
 
 def _build_overlay_separator(mesh: MeshLines):
@@ -141,6 +227,9 @@ def show_overlay(mesh: MeshLines) -> tuple[bool, str]:
 	separator = _build_overlay_separator(mesh)
 	scene_graph.addChild(separator)
 	_ACTIVE_OVERLAY = _OverlayState(separator=separator, signature=mesh.signature)
+	details = _preview_diagnostics(mesh)
+	if details:
+		return True, f"OpenEMS: Mesh overlay shown ({details})."
 	return True, "OpenEMS: Mesh overlay shown."
 
 

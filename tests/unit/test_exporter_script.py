@@ -9,6 +9,15 @@ if str(FREECAD_PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(FREECAD_PACKAGE_ROOT))
 
 
+def _default_mesh_lines() -> dict:
+    return {
+        "coordinate_system": "Cartesian",
+        "x": [0.0, 0.5, 1.0],
+        "y": [0.0, 0.5, 1.0],
+        "z": [0.0, 0.5, 1.0],
+    }
+
+
 def test_script_generator_writes_expected_lines(tmp_path):
     from OpenEMSWorkbench.exporter.model import ExportModel, GeometryEntry
     from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
@@ -24,6 +33,7 @@ def test_script_generator_writes_expected_lines(tmp_path):
             "ExcitationFc": 5e8,
         },
         grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
         materials=[
             {"name": "Copper", "IsPEC": True, "EpsilonR": 1.0, "MuR": 1.0, "Kappa": 0.0},
             {"name": "FR4", "IsPEC": False, "EpsilonR": 4.2, "MuR": 1.0, "Kappa": 0.02},
@@ -93,6 +103,7 @@ def test_script_generator_writes_run_lines_when_runnable(tmp_path):
         analysis_name="A1",
         simulation={"name": "Sim"},
         grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
     )
     path = generate_openems_script(
         model,
@@ -114,6 +125,7 @@ def test_script_generator_converts_signed_port_direction(tmp_path):
         analysis_name="A1",
         simulation={"ExcitationType": "Gaussian", "ExcitationF0": 1e9, "ExcitationFc": 5e8},
         grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
         ports=[
             {
                 "name": "P1",
@@ -146,6 +158,7 @@ def test_script_generator_uses_unassigned_fallback_for_missing_binding(tmp_path)
         analysis_name="A1",
         simulation={"ExcitationType": "Gaussian", "ExcitationF0": 1e9, "ExcitationFc": 5e8},
         grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
         materials=[{"name": "Copper", "IsPEC": True}],
         geometries=[
             GeometryEntry(
@@ -174,6 +187,7 @@ def test_script_generator_normalizes_delta_unit_to_mm_contract(tmp_path):
         analysis_name="A1",
         simulation={"DeltaUnit": 1.0},
         grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
     )
 
     path = generate_openems_script(model, tmp_path / "script_units.py")
@@ -191,6 +205,7 @@ def test_script_generator_scales_geometry_to_selected_delta_unit(tmp_path):
         analysis_name="A1",
         simulation={"DeltaUnit": 1.0, "FreeCADLengthUnitName": "in"},
         grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
         geometries=[
             GeometryEntry(
                 "B",
@@ -206,3 +221,44 @@ def test_script_generator_scales_geometry_to_selected_delta_unit(tmp_path):
 
     assert "grid.SetDeltaUnit(0.001)" in text
     assert "AddBox([0.0, 0.0, 0.0], [1000.0, 1000.0, 1000.0], priority=0)" in text
+
+
+def test_script_generator_prefers_model_mesh_lines_over_synthetic_axis(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={"DeltaUnit": 0.001},
+        grid={"MeshBaseStep": 0.1, "MeshMaxStep": 0.2},
+        mesh_lines={
+            "coordinate_system": "Cartesian",
+            "x": [0.0, 1.25, 2.5],
+            "y": [0.0, 3.0],
+            "z": [-1.0, 0.0, 4.0],
+        },
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_mesh_lines.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "grid.AddLine('x', [0.0, 1.25, 2.5])" in text
+    assert "grid.AddLine('y', [0.0, 3.0])" in text
+    assert "grid.AddLine('z', [-1.0, 0.0, 4.0])" in text
+
+
+def test_script_generator_rejects_missing_mesh_lines(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={"DeltaUnit": 0.001},
+        grid={"name": "Grid"},
+    )
+
+    try:
+        generate_openems_script(model, tmp_path / "script_missing_mesh.py")
+        assert False, "Expected missing mesh-lines to raise ValueError"
+    except ValueError as exc:
+        assert "missing mesh lines" in str(exc).lower()

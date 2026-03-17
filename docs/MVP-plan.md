@@ -191,7 +191,6 @@ Commit-sized tasks:
 5. Commit 5.5: Implement clean object-based mesh preview behavior in FreeCAD, including dense-mesh readability rules.
 6. Commit 5.6: Export mesh lines to the openEMS Python script from the same bounded/snapped mesh model used by preview.
 7. Commit 5.7: Remove legacy symmetric mesh-domain logic and duplicate exporter-side mesh-line generators.
-8. Commit 5.8: Add and run automated tests for each step, then run manual FreeCAD verification checks and record results.
 
 Manual verification checks for this phase:
 

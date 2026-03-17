@@ -7,7 +7,7 @@ except ImportError:
 
 
 class GridTaskPanel(BaseObjectTaskPanel):
-    PANEL_TITLE = "OpenEMS Grid"
+    PANEL_TITLE = "OpenEMS Grid (Mesh Settings)"
     FIELDS = [
         {
             "name": "CoordinateSystem",
@@ -15,8 +15,9 @@ class GridTaskPanel(BaseObjectTaskPanel):
             "type": "enum",
             "choices": ["Cartesian", "Cylindrical"],
         },
-        {"name": "BaseResolution", "label": "Base Resolution", "type": "float"},
-        {"name": "MaxResolution", "label": "Max Resolution", "type": "float"},
-        {"name": "GradingFactor", "label": "Grading Factor", "type": "float"},
-        {"name": "AutoSmooth", "label": "Auto Smooth", "type": "bool"},
+        {"name": "MeshBaseStep", "label": "Mesh Base Step", "type": "float"},
+        {"name": "MeshMaxStep", "label": "Mesh Max Step", "type": "float"},
+        {"name": "MeshGrowthRate", "label": "Mesh Growth Rate", "type": "float"},
+        {"name": "MeshAutoSmooth", "label": "Mesh Auto Smooth", "type": "bool"},
+        {"name": "MeshPreviewLineCap", "label": "Mesh Preview Line Cap", "type": "int"},
     ]

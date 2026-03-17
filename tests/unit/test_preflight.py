@@ -83,6 +83,42 @@ def test_preflight_detects_required_object_failures():
     assert summary["errors"] >= 3
 
 
+def test_preflight_requires_exactly_one_grid_object():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    findings = run_preflight(analysis)
+    assert not any(f.check_id == "required.grid_count" for f in findings)
+
+    analysis_without_grid = _minimal_valid_analysis()
+    analysis_without_grid.Group = [
+        obj
+        for obj in analysis_without_grid.Group
+        if getattr(getattr(obj, "Proxy", None), "TYPE", "") != "OpenEMS_Grid"
+    ]
+    findings_without_grid = run_preflight(analysis_without_grid)
+    assert any(f.check_id == "required.grid_count" for f in findings_without_grid)
+
+    analysis_with_duplicate_grid = _minimal_valid_analysis()
+    analysis_with_duplicate_grid.Group.append(
+        Obj("Grid2", "OpenEMS_Grid", CoordinateSystem="Cartesian")
+    )
+    findings_with_duplicate_grid = run_preflight(analysis_with_duplicate_grid)
+    assert any(f.check_id == "required.grid_count" for f in findings_with_duplicate_grid)
+
+
+def test_preflight_warns_when_mesh_fields_are_placed_on_simulation():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    simulation = analysis.Group[0]
+    simulation.MeshBaseStep = 0.5
+    simulation.MeshMaxStep = 2.0
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "mesh.ownership_simulation_fields" for f in findings)
+
+
 def test_preflight_detects_duplicate_ports():
     from OpenEMSWorkbench.validation.preflight import run_preflight
 

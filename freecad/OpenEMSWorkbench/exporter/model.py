@@ -20,6 +20,7 @@ class ExportModel:
     simulation: dict[str, Any]
     grid: dict[str, Any]
     simulation_box: dict[str, Any] = field(default_factory=dict)
+    mesh_lines: dict[str, Any] = field(default_factory=dict)
     materials: list[dict[str, Any]] = field(default_factory=list)
     boundary: dict[str, Any] = field(default_factory=dict)
     ports: list[dict[str, Any]] = field(default_factory=list)

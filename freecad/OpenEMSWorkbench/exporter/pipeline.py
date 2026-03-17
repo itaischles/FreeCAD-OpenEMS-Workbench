@@ -18,6 +18,11 @@ except ImportError:
     from OpenEMSWorkbench.exporter.stl_fallback import export_as_stl_entry
 
 try:
+    from meshing import build_mesh_for_analysis
+except ImportError:
+    from OpenEMSWorkbench.meshing import build_mesh_for_analysis
+
+try:
     from utils.export_paths import build_export_paths, ensure_export_dirs
 except ImportError:
     from OpenEMSWorkbench.utils.export_paths import build_export_paths, ensure_export_dirs
@@ -48,14 +53,30 @@ def _build_assignment_lookup(extracted: dict) -> dict[str, dict[str, int | str]]
     return lookup
 
 
-def _build_export_model(extracted: dict, stl_dir: Path) -> ExportModel:
+def _mesh_lines_to_dict(mesh) -> dict:
+    return {
+        "coordinate_system": str(getattr(mesh, "coordinate_system", "Cartesian") or "Cartesian"),
+        "x": [float(value) for value in getattr(mesh, "x", ())],
+        "y": [float(value) for value in getattr(mesh, "y", ())],
+        "z": [float(value) for value in getattr(mesh, "z", ())],
+        "radial": [float(value) for value in getattr(mesh, "radial", ())],
+        "azimuth": [float(value) for value in getattr(mesh, "azimuth", ())],
+    }
+
+
+def _build_export_model(extracted: dict, stl_dir: Path, analysis=None) -> ExportModel:
     assignment_lookup = _build_assignment_lookup(extracted)
+    mesh_lines = {}
+    if analysis is not None:
+        _, _, mesh = build_mesh_for_analysis(analysis)
+        mesh_lines = _mesh_lines_to_dict(mesh)
 
     model = ExportModel(
         analysis_name=extracted["analysis_name"],
         simulation=extracted["simulation"],
         grid=extracted["grid"],
         simulation_box=extracted.get("simulation_box", {}),
+        mesh_lines=mesh_lines,
         materials=extracted["materials"],
         boundary=extracted["boundary"],
         ports=extracted["ports"],
@@ -97,7 +118,7 @@ def export_analysis_dry_run(analysis, base_output_dir: str | Path, document_name
     extracted = read_analysis_for_export(analysis)
     paths = build_export_paths(base_output_dir, document_name, extracted["analysis_name"])
     ensure_export_dirs(paths)
-    model = _build_export_model(extracted, paths["stl_dir"])
+    model = _build_export_model(extracted, paths["stl_dir"], analysis=analysis)
     generate_openems_script(model, paths["script"], runnable=False)
     return _result_dict(paths, model)
 
@@ -115,7 +136,7 @@ def export_analysis_run_ready(
     run_dir = Path(run_output_dir) if run_output_dir else paths["run_dir"]
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    model = _build_export_model(extracted, paths["stl_dir"])
+    model = _build_export_model(extracted, paths["stl_dir"], analysis=analysis)
     generate_openems_script(
         model,
         paths["script"],

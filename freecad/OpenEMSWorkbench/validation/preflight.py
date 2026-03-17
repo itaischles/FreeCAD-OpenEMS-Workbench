@@ -56,7 +56,10 @@ def _check_required_counts(members) -> list[PreflightFinding]:
             _finding(
                 "error",
                 "required.grid_count",
-                f"Analysis must contain exactly one Grid object, found {len(members.grids)}.",
+                (
+                    "Analysis must contain exactly one Grid object, "
+                    f"found {len(members.grids)}. The Grid object owns mesh settings for the analysis."
+                ),
             )
         )
     if len(members.materials) < 1:
@@ -112,10 +115,47 @@ def _check_coordinate_system(members) -> list[PreflightFinding]:
             _finding(
                 "error",
                 "grid.coordinate_system_consistency",
-                f"Simulation coordinate system '{sim_cs}' does not match grid coordinate system '{grid_cs}'.",
+                (
+                    f"Simulation coordinate system '{sim_cs}' does not match "
+                    f"grid coordinate system '{grid_cs}'."
+                ),
                 grid,
             )
         )
+    return findings
+
+
+def _check_mesh_ownership_boundaries(members) -> list[PreflightFinding]:
+    findings: list[PreflightFinding] = []
+    if not members.simulations:
+        return findings
+
+    sim = members.simulations[0]
+    misplaced_mesh_fields = [
+        name
+        for name in (
+            "MeshBaseStep",
+            "MeshMaxStep",
+            "MeshGrowthRate",
+            "MeshAutoSmooth",
+            "MeshPreviewLineCap",
+        )
+        if hasattr(sim, name)
+    ]
+    if misplaced_mesh_fields:
+        field_list = ", ".join(misplaced_mesh_fields)
+        findings.append(
+            _finding(
+                "warning",
+                "mesh.ownership_simulation_fields",
+                (
+                    "Mesh settings must be configured on the Grid object. "
+                    f"Simulation contains mesh-like fields that are ignored: {field_list}."
+                ),
+                sim,
+            )
+        )
+
     return findings
 
 
@@ -490,6 +530,7 @@ def run_preflight(analysis: Any) -> list[PreflightFinding]:
     findings.extend(_check_legacy_boundary_objects(members))
     findings.extend(_check_port_numbers(members))
     findings.extend(_check_coordinate_system(members))
+    findings.extend(_check_mesh_ownership_boundaries(members))
     findings.extend(_check_dumpbox_frequency(members))
     findings.extend(_check_output_directory(members))
     findings.extend(_check_solver_configuration(members))

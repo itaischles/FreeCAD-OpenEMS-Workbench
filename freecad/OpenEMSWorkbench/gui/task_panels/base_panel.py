@@ -20,12 +20,23 @@ class BaseObjectTaskPanel:
             raise RuntimeError("PySide2 is required to show task panels")
 
         self.obj = obj
+        self._sync_object_properties()
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(self.PANEL_TITLE)
 
         self._widgets: dict[str, Any] = {}
         self._build_ui()
         self._load_values()
+
+    def _sync_object_properties(self) -> None:
+        proxy = getattr(self.obj, "Proxy", None)
+        ensure_properties = getattr(proxy, "ensure_properties", None)
+        if callable(ensure_properties):
+            try:
+                ensure_properties(self.obj)
+            except Exception:
+                # Keep panels usable even if property sync fails in runtime edge cases.
+                pass
 
     def _build_ui(self) -> None:
         layout = QtWidgets.QVBoxLayout(self.form)

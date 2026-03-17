@@ -50,7 +50,7 @@ class OpenEMSSimulationProxy(FeatureProxyBase):
             "App::PropertyEnumeration",
             "CoordinateSystem",
             "OpenEMS",
-            "Simulation coordinate system.",
+            "Simulation coordinate system; must match Grid coordinate system.",
             DEFAULTS["simulation"]["coordinate_system"],
         )
         add_property_if_missing(
@@ -66,7 +66,7 @@ class OpenEMSSimulationProxy(FeatureProxyBase):
             "App::PropertyFloat",
             "SimulationBoxMargin",
             "OpenEMS",
-            "Margin added around auto-derived simulation box (model units).",
+            "Margin added around auto-derived simulation box domain (model units).",
             0.0,
         )
         add_property_if_missing(

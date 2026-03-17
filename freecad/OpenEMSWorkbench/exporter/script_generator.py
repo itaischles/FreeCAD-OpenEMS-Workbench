@@ -41,33 +41,44 @@ def _normalize_direction(value) -> tuple[str, bool]:
     return "z", False
 
 
-def _axis_lines(base_resolution: float, max_resolution: float) -> list[float]:
-    step = max(float(base_resolution), 1e-9)
-    max_step = max(float(max_resolution), step)
-    half_span = max(max_step * 8.0, step * 12.0)
-    pos = 0.0
-    lines: list[float] = [0.0]
-
-    while pos + step < half_span:
-        pos += step
-        lines.append(round(pos, 9))
-        step = min(max_step, step * 1.3)
-
-    mirrored = [-value for value in reversed(lines[1:])]
-    return mirrored + lines
+def _as_float_list(values) -> list[float]:
+    if not isinstance(values, (list, tuple)):
+        return []
+    result: list[float] = []
+    for value in values:
+        try:
+            result.append(float(value))
+        except Exception:
+            continue
+    return result
 
 
-def _grid_lines_from_model(model) -> tuple[list[float], list[float], list[float], float]:
+def _grid_lines_from_model(model) -> tuple[str, list[float], list[float], list[float], list[float], list[float], float]:
     grid = model.grid or {}
     sim = model.simulation or {}
-    base = _as_float(grid.get("BaseResolution", 1.0), 1.0)
-    max_res = _as_float(grid.get("MaxResolution", 5.0), 5.0)
-    if max_res < base:
-        max_res = base
+    mesh_lines = model.mesh_lines or {}
+    coordinate_system = str(mesh_lines.get("coordinate_system") or grid.get("CoordinateSystem") or "Cartesian")
     delta_unit = coerce_delta_unit(sim.get("DeltaUnit"))
     scale = mm_to_model_unit_scale(delta_unit)
-    axis = [round(value * scale, 9) for value in _axis_lines(base, max_res)]
-    return axis, axis, axis, delta_unit
+    x = _as_float_list(mesh_lines.get("x"))
+    y = _as_float_list(mesh_lines.get("y"))
+    z = _as_float_list(mesh_lines.get("z"))
+    radial = _as_float_list(mesh_lines.get("radial"))
+    azimuth = _as_float_list(mesh_lines.get("azimuth"))
+    if coordinate_system == "Cylindrical" and radial and z:
+        r_axis = [round(value * scale, 9) for value in radial]
+        a_axis = [round(value, 9) for value in azimuth]
+        z_axis = [round(value * scale, 9) for value in z]
+        return coordinate_system, [], [], z_axis, r_axis, a_axis, delta_unit
+    if x and y and z:
+        x_axis = [round(value * scale, 9) for value in x]
+        y_axis = [round(value * scale, 9) for value in y]
+        z_axis = [round(value * scale, 9) for value in z]
+        return coordinate_system, x_axis, y_axis, z_axis, [], [], delta_unit
+
+    raise ValueError(
+        "Export model is missing mesh lines. Regenerate mesh from the active analysis before export."
+    )
 
 
 def _vec3(values, default: list[float]) -> list[float]:
@@ -121,7 +132,7 @@ def generate_openems_script(
     lines.append("from pathlib import Path")
     lines.append("")
     lines.append("CSX = CSXCAD.ContinuousStructure()")
-    x_lines, y_lines, z_lines, delta_unit = _grid_lines_from_model(model)
+    coordinate_system, x_lines, y_lines, z_lines, radial_lines, azimuth_lines, delta_unit = _grid_lines_from_model(model)
     model_unit_name = str((model.simulation or {}).get("FreeCADLengthUnitName") or "").strip()
     if not model_unit_name:
         model_unit_name = detect_freecad_length_unit_name()
@@ -132,9 +143,15 @@ def generate_openems_script(
     )
     lines.append("grid = CSX.GetGrid()")
     lines.append(f"grid.SetDeltaUnit({delta_unit})")
-    lines.append(f"grid.AddLine('x', {x_lines})")
-    lines.append(f"grid.AddLine('y', {y_lines})")
-    lines.append(f"grid.AddLine('z', {z_lines})")
+    if coordinate_system == "Cylindrical" and radial_lines and z_lines:
+        lines.append(f"grid.AddLine('r', {radial_lines})")
+        if azimuth_lines:
+            lines.append(f"grid.AddLine('a', {azimuth_lines})")
+        lines.append(f"grid.AddLine('z', {z_lines})")
+    else:
+        lines.append(f"grid.AddLine('x', {x_lines})")
+        lines.append(f"grid.AddLine('y', {y_lines})")
+        lines.append(f"grid.AddLine('z', {z_lines})")
     lines.append("")
     sim = model.simulation or {}
     nr_ts = _as_int(sim.get("NumberOfTimeSteps", 100000), 100000)

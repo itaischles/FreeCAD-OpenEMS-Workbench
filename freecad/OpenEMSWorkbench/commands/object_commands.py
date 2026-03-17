@@ -262,6 +262,12 @@ def _read_log_tail(path: str, max_lines: int = 3) -> str:
         return ""
 
 
+def _mesh_cap_summary(grid, mesh) -> str:
+    configured = getattr(grid, "MeshPreviewLineCap", None)
+    effective = getattr(mesh, "preview_line_cap", None)
+    return f"cap_configured={configured}, cap_effective={effective}"
+
+
 def _preflight_gate(analysis):
     findings = run_preflight(analysis)
     summary = summarize_findings(findings)
@@ -722,7 +728,8 @@ class _ShowHideMeshOverlayCommand:
 
         _, message = show_overlay(mesh)
         App.Console.PrintMessage(
-            f"{message} Grid='{getattr(grid, 'Label', 'openEMS Grid')}'.\n"
+            f"{message} Grid='{getattr(grid, 'Label', 'openEMS Grid')}' "
+            f"({_mesh_cap_summary(grid, mesh)}).\n"
         )
 
     def IsActive(self):
@@ -869,7 +876,8 @@ class _RefreshMeshOverlayCommand:
 
         _, message = refresh_overlay(mesh)
         App.Console.PrintMessage(
-            f"{message} Grid='{getattr(grid, 'Label', 'openEMS Grid')}'.\n"
+            f"{message} Grid='{getattr(grid, 'Label', 'openEMS Grid')}' "
+            f"({_mesh_cap_summary(grid, mesh)}).\n"
         )
 
     def IsActive(self):
