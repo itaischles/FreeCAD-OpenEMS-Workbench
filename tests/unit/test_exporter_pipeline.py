@@ -202,3 +202,37 @@ def test_build_export_model_rejects_conflicting_duplicate_assignments(tmp_path):
         assert False, "Expected conflicting material assignments to raise ValueError"
     except ValueError as exc:
         assert "GeoBox" in str(exc)
+
+
+def test_build_export_model_carries_simulation_box(tmp_path):
+    from OpenEMSWorkbench.exporter.pipeline import _build_export_model
+
+    geo_box = GeoObj("GeoBox", "Part::Box")
+    stl_dir = tmp_path / "stl"
+    stl_dir.mkdir(parents=True, exist_ok=True)
+
+    extracted = {
+        "analysis_name": "Analysis",
+        "simulation": {},
+        "grid": {},
+        "simulation_box": {
+            "XMin": -1.0,
+            "YMin": -2.0,
+            "ZMin": -3.0,
+            "XMax": 4.0,
+            "YMax": 5.0,
+            "ZMax": 6.0,
+            "Margin": 0.0,
+        },
+        "materials": [],
+        "boundary": {},
+        "ports": [],
+        "dumpboxes": [],
+        "geometry_objects": [geo_box],
+        "material_assignments": [],
+    }
+
+    model = _build_export_model(extracted, stl_dir)
+
+    assert model.simulation_box["XMin"] == -1.0
+    assert model.simulation_box["ZMax"] == 6.0

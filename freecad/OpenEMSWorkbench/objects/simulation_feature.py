@@ -48,6 +48,14 @@ class OpenEMSSimulationProxy(FeatureProxyBase):
         )
         add_property_if_missing(
             obj,
+            "App::PropertyFloat",
+            "SimulationBoxMargin",
+            "OpenEMS",
+            "Margin added around auto-derived simulation box (model units).",
+            0.0,
+        )
+        add_property_if_missing(
+            obj,
             "App::PropertyInteger",
             "NumberOfTimeSteps",
             "OpenEMS",

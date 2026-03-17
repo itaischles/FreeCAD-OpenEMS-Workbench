@@ -66,6 +66,7 @@ def add_member_to_analysis(analysis: Any, member: Any) -> bool:
         return False
 
     analysis.addObject(member)
+
     return True
 
 

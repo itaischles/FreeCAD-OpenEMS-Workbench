@@ -14,12 +14,12 @@ Goal: let the next session start fast without scanning the whole repository.
 ## Current Snapshot
 
 - Date: 2026-03-16
-- Current phase (from MVP-plan): Phase 4 (compute simulation box and units automatically)
-- Current commit task (for example: Commit 2.3): Phase 4, Commit 4.1 (compute analysis geometry bounding box and add configurable margin)
+- Current phase (from MVP-plan): Phase 4 (Configure simulation bounding box and units)
+- Current commit task (for example: Commit 2.3): Phase 4, Commit 4.1.
 - Status: Ready to implement
 - Branch name: not recorded in handoff yet
 - Last completed commit task: Phase 3, Commit 3.4 (STL fallback path coverage with direct/fallback tests)
-- Next immediate task: implement Phase 4, Commit 4.1 (compute analysis geometry bounding box and add configurable margin)
+- Next immediate task: implement Phase 4, Commit 4.1.
 
 ## Quick Context
 

@@ -94,3 +94,13 @@ def test_assign_members_to_analysis_detailed_counts_states():
     assert result["added"] == 2
     assert result["already_member"] == 1
     assert result["ignored"] == 1
+
+
+def test_add_member_to_analysis_adds_geometry_without_side_effect_hooks():
+    from OpenEMSWorkbench.utils.analysis_context import add_member_to_analysis
+
+    analysis = AnalysisObj("Analysis")
+    geom = ShapeObj("Cube")
+
+    assert add_member_to_analysis(analysis, geom) is True
+    assert analysis.Group == [geom]

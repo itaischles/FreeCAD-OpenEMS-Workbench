@@ -30,6 +30,28 @@ class GeoObj:
         self.Shape = object()
 
 
+class _BoundBox:
+    def __init__(self, xmin, ymin, zmin, xmax, ymax, zmax):
+        self.XMin = xmin
+        self.YMin = ymin
+        self.ZMin = zmin
+        self.XMax = xmax
+        self.YMax = ymax
+        self.ZMax = zmax
+
+
+class _ShapeWithBoundBox:
+    def __init__(self, bb):
+        self.BoundBox = bb
+
+
+class GeoObjWithBounds:
+    def __init__(self, name, xmin, ymin, zmin, xmax, ymax, zmax):
+        self.Name = name
+        self.Label = name
+        self.Shape = _ShapeWithBoundBox(_BoundBox(xmin, ymin, zmin, xmax, ymax, zmax))
+
+
 class Analysis:
     def __init__(self, group):
         self.Name = "Analysis"
@@ -104,3 +126,71 @@ def test_document_reader_handles_missing_assignment_fields():
     assert material["AssignmentPriority"] == 0
     assert material["AssignedGeometryNames"] == []
     assert extracted["material_assignments"] == []
+
+
+def test_document_reader_computes_simulation_box_with_margin_and_skips_helper_box():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    geo_a = GeoObjWithBounds("GeoA", 0.0, 0.0, 0.0, 10.0, 10.0, 5.0)
+    geo_b = GeoObjWithBounds("GeoB", -2.0, 1.0, -1.0, 3.0, 8.0, 2.0)
+    helper_box = GeoObjWithBounds("OpenEMSSimulationBox", -100, -100, -100, 100, 100, 100)
+    helper_box.OpenEMSSimulationBox = True
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.5),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            OpenEMSObj("Bnd", "OpenEMS_Boundary"),
+            geo_a,
+            geo_b,
+            helper_box,
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    sim_box = extracted["simulation_box"]
+
+    assert sim_box["XMin"] == -2.5
+    assert sim_box["YMin"] == -0.5
+    assert sim_box["ZMin"] == -1.5
+    assert sim_box["XMax"] == 10.5
+    assert sim_box["YMax"] == 10.5
+    assert sim_box["ZMax"] == 5.5
+    assert sim_box["Margin"] == 0.5
+
+    geometry_names = [obj.Name for obj in extracted["geometry_objects"]]
+    assert geometry_names == ["GeoA", "GeoB"]
+
+
+def test_document_reader_uses_simulation_box_margin_property_when_present():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    geo_a = GeoObjWithBounds("GeoA", 0.0, 0.0, 0.0, 10.0, 10.0, 5.0)
+    geo_b = GeoObjWithBounds("GeoB", -2.0, 1.0, -1.0, 3.0, 8.0, 2.0)
+    helper_box = GeoObjWithBounds("OpenEMSSimulationBox", -100, -100, -100, 100, 100, 100)
+    helper_box.OpenEMSSimulationBox = True
+    helper_box.Margin = 2.0
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.5),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            OpenEMSObj("Bnd", "OpenEMS_Boundary"),
+            geo_a,
+            geo_b,
+            helper_box,
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    sim_box = extracted["simulation_box"]
+
+    assert sim_box["XMin"] == -4.0
+    assert sim_box["YMin"] == -2.0
+    assert sim_box["ZMin"] == -3.0
+    assert sim_box["XMax"] == 12.0
+    assert sim_box["YMax"] == 12.0
+    assert sim_box["ZMax"] == 7.0
+    assert sim_box["Margin"] == 2.0
+
+

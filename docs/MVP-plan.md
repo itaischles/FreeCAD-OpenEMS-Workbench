@@ -142,10 +142,11 @@ This phase should:
 - Let the user assign boundary conditions by selecting a box face and choosing a boundary type.
 - Export the selected face boundary conditions into the generated openEMS Python script.
 - Define one clear unit-conversion path from FreeCAD units to openEMS units and apply it everywhere in export and run.
+- End with one unified model: simulation box + per-face boundaries in the same object, with legacy separate boundary/simulation-box objects and data model removed.
 
 Reason:
 
-This matches the intended workflow: users can see and edit the simulation region directly in FreeCAD, assign boundaries interactively, and trust that the exported script reflects exactly what they configured.
+This matches the intended workflow: users can see and edit the simulation region directly in FreeCAD, assign boundaries interactively, and trust that the exported script reflects exactly what they configured. It also removes legacy duplication so there is only one source of truth for simulation-region and boundary data.
 
 Commit-sized tasks:
 
@@ -154,7 +155,8 @@ Commit-sized tasks:
 3. Commit 4.3: Implement face-based boundary assignment workflow on the simulation box and store per-face boundary settings persistently.
 4. Commit 4.4: Export per-face boundary settings from the simulation box into real openEMS boundary commands in the generated Python script.
 5. Commit 4.5: Enforce one explicit unit contract so the units shown in FreeCAD are the exact same units openEMS reads from the exported Python input (no hidden scale mismatch), and apply this consistently in geometry, boundary coordinates, exporter, and run pipeline.
-6. Commit 4.6: Add tests for box generation defaults, face boundary persistence/export mapping, and unit-conversion consistency (including millimeter-based input geometry).
+6. Commit 4.6: Migrate legacy boundary/simulation-box data to the new unified simulation-box object model, then remove legacy separate boundary/simulation-box objects, UI paths, and exporter/preflight dependencies.
+7. Commit 4.7: Add tests for box generation defaults, face boundary persistence/export mapping, legacy-migration/removal behavior, and unit-conversion consistency (including millimeter-based input geometry).
 
 ### Phase 5: connect mesh to the real model extent
 
@@ -166,6 +168,7 @@ This phase should:
 - Generate mesh lines based on that region.
 - Keep the result deterministic so tests stay stable.
 - Update correctly when geometry changes.
+- Remove the legacy generic symmetric mesh-domain path once simulation-box-driven meshing is stable.
 
 Reason:
 
@@ -176,6 +179,7 @@ Commit-sized tasks:
 1. Commit 5.1: Drive mesh domain from computed simulation box instead of generic symmetric extents.
 2. Commit 5.2: Update mesh overlay refresh logic so geometry changes trigger correct mesh updates.
 3. Commit 5.3: Add deterministic mesh generation tests for repeated export and overlay refresh.
+4. Commit 5.4: Remove legacy symmetric mesh-domain code paths and related UI/validation assumptions after migration.
 
 ### Phase 6: make dump boxes generate real field output
 
@@ -186,6 +190,7 @@ This phase should:
 - Export real field-dump definitions.
 - Save the dump results into the chosen results folder.
 - Support at least the electric field first.
+- Remove placeholder dumpbox export behavior once real dump commands are implemented.
 
 Reason:
 
@@ -197,6 +202,7 @@ Commit-sized tasks:
 2. Commit 6.2: Generate real openEMS field-dump commands for at least electric-field outputs.
 3. Commit 6.3: Ensure dump output paths are created under the user-defined results folder.
 4. Commit 6.4: Add tests that verify dump commands and output path generation.
+5. Commit 6.5: Remove legacy placeholder dumpbox script stubs and temporary compatibility branches.
 
 ### Phase 7: stabilize one simple end-to-end runnable case
 
@@ -232,6 +238,7 @@ This phase should:
 - Expose those settings in the task panel.
 - Validate them in preflight.
 - Export real waveguide port commands in the script.
+- Remove placeholder/legacy waveguide-port export stubs once the real waveguide path is stable.
 
 Recommended first version:
 
@@ -248,6 +255,7 @@ Commit-sized tasks:
 2. Commit 8.2: Extend port task panel UI with waveguide settings and validation hints.
 3. Commit 8.3: Extend preflight to validate waveguide-specific requirements.
 4. Commit 8.4: Generate waveguide port commands in script export and add tests.
+5. Commit 8.5: Remove legacy placeholder waveguide-port branches while preserving working non-waveguide port behavior.
 
 ### Phase 9: add sinusoidal excitation support
 
@@ -259,6 +267,7 @@ This phase should:
 - Keep Gaussian excitation working.
 - Validate excitation parameters properly.
 - Export the correct openEMS excitation call.
+- Remove temporary unsupported-excitation placeholder branches once sinusoidal export is fully integrated.
 
 Reason:
 
@@ -270,6 +279,7 @@ Commit-sized tasks:
 2. Commit 9.2: Add preflight checks for sinusoidal parameter validity.
 3. Commit 9.3: Map sinusoidal mode to the correct openEMS script calls while preserving Gaussian behavior.
 4. Commit 9.4: Add tests for both Gaussian and sinusoidal export paths.
+5. Commit 9.5: Remove legacy placeholder excitation branches and keep one clean production excitation path set (Gaussian + Sinusoidal).
 
 ### Phase 10: build the coaxial-cable reference workflow
 

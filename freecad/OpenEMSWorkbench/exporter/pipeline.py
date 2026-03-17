@@ -55,6 +55,7 @@ def _build_export_model(extracted: dict, stl_dir: Path) -> ExportModel:
         analysis_name=extracted["analysis_name"],
         simulation=extracted["simulation"],
         grid=extracted["grid"],
+        simulation_box=extracted.get("simulation_box", {}),
         materials=extracted["materials"],
         boundary=extracted["boundary"],
         ports=extracted["ports"],
