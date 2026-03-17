@@ -157,28 +157,49 @@ Commit-sized tasks:
 5. Commit 4.5: Enforce one explicit unit contract so the units shown in FreeCAD are the exact same units openEMS reads from the exported Python input (no hidden scale mismatch), and apply this consistently in geometry, boundary coordinates, exporter, and run pipeline.
 6. Commit 4.6: Migrate legacy boundary/simulation-box data to the new unified simulation-box object model, then remove legacy separate boundary/simulation-box objects, UI paths, and exporter/preflight dependencies.
 
-### Phase 5: connect mesh to the real model extent
+### Phase 5: generate mesh from the simulation box and export it consistently
 
-The mesh overlay already exists, but it should be tied to the real simulation domain rather than a generic symmetric grid.
+The current mesh path still includes generic symmetric behavior, so this phase should replace it with one clean production mesh pipeline tied to the Phase 4 simulation box.
 
 This phase should:
 
-- Use the automatically computed simulation box.
-- Generate mesh lines based on that region.
-- Keep the result deterministic so tests stay stable.
-- Update correctly when geometry changes.
-- Remove the legacy generic symmetric mesh-domain path once simulation-box-driven meshing is stable.
+- Generate mesh only inside the simulation box computed in Phase 4.
+- Use user-defined mesh resolution stored on the simulation object.
+- Snap mesh lines conservatively to analysis solids by aligning to solid bounding-face planes.
+- Use consistent terminology in user-facing text and UI labels: mesh (not grid).
+- Display the mesh cleanly in FreeCAD using an object-based preview path with readable behavior for dense meshes.
+- Export the same mesh model to the openEMS Python script so preview and export share one source of truth.
+- Remove legacy symmetric mesh-generation and duplicate mesh-calculation paths completely after migration.
+- Verify each step with automated tests and manual FreeCAD checks.
 
 Reason:
 
-The mesh should correspond to the actual simulation model, especially for practical work such as cables and waveguides.
+The mesh must represent the real simulation domain and geometry, stay deterministic for testing, and be consistent between FreeCAD preview and openEMS script export.
 
 Commit-sized tasks:
 
-1. Commit 5.1: Drive mesh domain from computed simulation box instead of generic symmetric extents.
-2. Commit 5.2: Update mesh overlay refresh logic so geometry changes trigger correct mesh updates.
-3. Commit 5.3: Add deterministic mesh generation tests for repeated export and overlay refresh.
-4. Commit 5.4: Remove legacy symmetric mesh-domain code paths and related UI/validation assumptions after migration.
+1. Commit 5.1: Add simulation-level mesh resolution settings and defaults on the simulation object.
+2. Commit 5.2: Generate mesh strictly inside the simulation-box extents.
+3. Commit 5.3: Add conservative solid-aware snapping to bounding-face planes while keeping deterministic ordering.
+4. Commit 5.4: Implement clean object-based mesh preview behavior in FreeCAD, including dense-mesh readability rules.
+5. Commit 5.5: Export mesh lines to the openEMS Python script from the same bounded/snapped mesh model used by preview.
+6. Commit 5.6: Remove legacy symmetric mesh-domain logic and duplicate exporter-side mesh-line generators.
+7. Commit 5.7: Normalize user-facing terminology to mesh across this workflow.
+8. Commit 5.8: Add and run automated tests for each step, then run manual FreeCAD verification checks and record results.
+
+Manual verification checks for this phase:
+
+- Check 5.M1: Build an analysis with solids, refresh the simulation box, generate mesh preview, and verify no mesh appears outside the simulation box.
+- Check 5.M2: Change only simulation mesh resolution and verify mesh density updates as expected.
+- Check 5.M3: Verify conservative snapping by confirming mesh lines align with solid bounding faces.
+- Check 5.M4: Export and inspect the generated Python script to verify mesh lines match bounded/snapped preview behavior.
+- Check 5.M5: Save and reopen the document, then verify mesh settings and preview behavior persist without legacy behavior.
+
+Automated verification checks for this phase:
+
+- Run `pytest tests/unit/test_mesh_generation.py tests/unit/test_exporter_script.py tests/unit/test_exporter_pipeline.py` after each commit-sized task.
+- Run `pytest tests/unit/test_analysis_feature.py tests/unit/test_phase2_commands.py tests/unit/test_preflight.py` after changes that touch simulation object wiring, commands, or validation.
+- Add/adjust tests to assert boundedness, deterministic snapping behavior, preview/export consistency, and absence of legacy mesh paths.
 
 ### Phase 6: make dump boxes generate real field output
 
