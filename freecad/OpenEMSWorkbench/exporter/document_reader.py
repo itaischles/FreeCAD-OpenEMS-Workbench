@@ -11,6 +11,11 @@ except ImportError:
     from OpenEMSWorkbench.utils.analysis_context import get_proxy_type
 
 try:
+    from model import BOUNDARY_TYPES, DEFAULTS
+except ImportError:
+    from OpenEMSWorkbench.model import BOUNDARY_TYPES, DEFAULTS
+
+try:
     from validation.member_collection import collect_members
 except ImportError:
     from OpenEMSWorkbench.validation.member_collection import collect_members
@@ -104,6 +109,13 @@ def _find_simulation_box_object(analysis):
     for obj in list(getattr(analysis, "Group", [])):
         if bool(getattr(obj, "OpenEMSSimulationBox", False)):
             return obj
+
+    # Fallback: recover an existing helper box already in the document but not yet in Group.
+    document = getattr(analysis, "Document", None)
+    if document is not None:
+        for obj in list(getattr(document, "Objects", [])):
+            if bool(getattr(obj, "OpenEMSSimulationBox", False)):
+                return obj
     return None
 
 
@@ -124,6 +136,93 @@ def _mark_simulation_box(obj):
         pass
 
 
+def _ensure_simulation_box_view_defaults(obj) -> None:
+    # Apply display defaults once so users can still customize afterwards.
+    if hasattr(obj, "addProperty") and not hasattr(obj, "OpenEMSViewDefaultsApplied"):
+        try:
+            obj.addProperty(
+                "App::PropertyBool",
+                "OpenEMSViewDefaultsApplied",
+                "OpenEMS",
+                "Tracks whether default simulation-box view style was initialized.",
+            )
+        except Exception:
+            pass
+
+    if bool(getattr(obj, "OpenEMSViewDefaultsApplied", False)):
+        return
+
+    view_obj = getattr(obj, "ViewObject", None)
+    if view_obj is not None:
+        try:
+            view_obj.Transparency = 80
+        except Exception:
+            pass
+
+    try:
+        obj.OpenEMSViewDefaultsApplied = True
+    except Exception:
+        pass
+
+
+def _ensure_box_boundary_properties(obj) -> None:
+    face_defaults = {
+        "BoundaryXMin": DEFAULTS["boundary"]["xmin"],
+        "BoundaryXMax": DEFAULTS["boundary"]["xmax"],
+        "BoundaryYMin": DEFAULTS["boundary"]["ymin"],
+        "BoundaryYMax": DEFAULTS["boundary"]["ymax"],
+        "BoundaryZMin": DEFAULTS["boundary"]["zmin"],
+        "BoundaryZMax": DEFAULTS["boundary"]["zmax"],
+    }
+
+    if hasattr(obj, "addProperty"):
+        for prop_name in face_defaults:
+            if hasattr(obj, prop_name):
+                continue
+            try:
+                obj.addProperty(
+                    "App::PropertyEnumeration",
+                    prop_name,
+                    "OpenEMS Boundary",
+                    "Boundary condition assigned to simulation-box face.",
+                )
+            except Exception:
+                pass
+
+    for prop_name, default_value in face_defaults.items():
+        if not hasattr(obj, prop_name):
+            continue
+        try:
+            current = str(getattr(obj, prop_name, "") or "")
+            setattr(obj, prop_name, BOUNDARY_TYPES)
+            if current in BOUNDARY_TYPES:
+                setattr(obj, prop_name, current)
+            else:
+                setattr(obj, prop_name, default_value)
+        except Exception:
+            pass
+
+    if hasattr(obj, "addProperty") and not hasattr(obj, "BoundaryPMLCells"):
+        try:
+            obj.addProperty(
+                "App::PropertyInteger",
+                "BoundaryPMLCells",
+                "OpenEMS Boundary",
+                "Number of PML cells used with PML boundary conditions.",
+            )
+        except Exception:
+            pass
+
+    if hasattr(obj, "BoundaryPMLCells"):
+        try:
+            value = int(getattr(obj, "BoundaryPMLCells", DEFAULTS["boundary"]["pml_cells"]) or 0)
+            if value < 1:
+                value = int(DEFAULTS["boundary"]["pml_cells"])
+            obj.BoundaryPMLCells = value
+        except Exception:
+            pass
+
+
 def _ensure_margin_property(obj, initial_margin: float = 0.0) -> None:
     if hasattr(obj, "addProperty") and not hasattr(obj, "Margin"):
         try:
@@ -131,7 +230,7 @@ def _ensure_margin_property(obj, initial_margin: float = 0.0) -> None:
                 "App::PropertyLength",
                 "Margin",
                 "OpenEMS",
-                "Margin applied around analysis geometry when auto-sizing simulation box.",
+                "Margin applied around analysis geometry when simulation box auto-fits on analysis refresh events.",
             )
         except Exception:
             pass
@@ -144,6 +243,42 @@ def _ensure_margin_property(obj, initial_margin: float = 0.0) -> None:
             obj.Margin = float(current)
         except Exception:
             pass
+
+
+def ensure_simulation_box_properties(obj, default_margin: float = 0.0) -> None:
+    _mark_simulation_box(obj)
+    _ensure_margin_property(obj, initial_margin=default_margin)
+    _ensure_box_boundary_properties(obj)
+
+
+def read_simulation_box_boundary_settings(obj) -> dict:
+    if obj is None:
+        return {}
+
+    return {
+        "XMin": str(getattr(obj, "BoundaryXMin", DEFAULTS["boundary"]["xmin"]) or DEFAULTS["boundary"]["xmin"]),
+        "XMax": str(getattr(obj, "BoundaryXMax", DEFAULTS["boundary"]["xmax"]) or DEFAULTS["boundary"]["xmax"]),
+        "YMin": str(getattr(obj, "BoundaryYMin", DEFAULTS["boundary"]["ymin"]) or DEFAULTS["boundary"]["ymin"]),
+        "YMax": str(getattr(obj, "BoundaryYMax", DEFAULTS["boundary"]["ymax"]) or DEFAULTS["boundary"]["ymax"]),
+        "ZMin": str(getattr(obj, "BoundaryZMin", DEFAULTS["boundary"]["zmin"]) or DEFAULTS["boundary"]["zmin"]),
+        "ZMax": str(getattr(obj, "BoundaryZMax", DEFAULTS["boundary"]["zmax"]) or DEFAULTS["boundary"]["zmax"]),
+        "PMLCells": int(getattr(obj, "BoundaryPMLCells", DEFAULTS["boundary"]["pml_cells"]) or DEFAULTS["boundary"]["pml_cells"]),
+    }
+
+
+def _resolve_boundary_for_export(analysis, legacy_boundary) -> dict:
+    box_obj = _find_simulation_box_object(analysis)
+    if box_obj is not None:
+        ensure_simulation_box_properties(box_obj)
+        return read_simulation_box_boundary_settings(box_obj)
+
+    if legacy_boundary is None:
+        return {}
+
+    return _object_to_dict(
+        legacy_boundary,
+        ["XMin", "XMax", "YMin", "YMax", "ZMin", "ZMax", "PMLCells"],
+    )
 
 
 def _read_margin_from_box(box_obj, default_margin: float = 0.0) -> float:
@@ -162,17 +297,19 @@ def _sync_visible_simulation_box(analysis, simulation_box: dict) -> None:
         return
 
     box_obj = _find_simulation_box_object(analysis)
-    created = False
     if box_obj is None:
         try:
             box_obj = document.addObject("Part::Box", "OpenEMSSimulationBox")
-            created = True
         except Exception:
             return
 
     _mark_simulation_box(box_obj)
+    _ensure_simulation_box_view_defaults(box_obj)
     box_obj.Label = "openEMS Simulation Box"
-    _ensure_margin_property(box_obj, initial_margin=_as_float(simulation_box.get("Margin", 0.0), 0.0))
+    ensure_simulation_box_properties(
+        box_obj,
+        default_margin=_as_float(simulation_box.get("Margin", 0.0), 0.0),
+    )
 
     size = simulation_box.get("Size", [0.0, 0.0, 0.0])
     start = simulation_box.get("Start", [0.0, 0.0, 0.0])
@@ -194,7 +331,7 @@ def _sync_visible_simulation_box(analysis, simulation_box: dict) -> None:
         except Exception:
             pass
 
-    if created and hasattr(analysis, "addObject"):
+    if hasattr(analysis, "addObject") and box_obj not in list(getattr(analysis, "Group", [])):
         try:
             setattr(analysis, "_openems_skip_group_refresh", True)
             analysis.addObject(box_obj)
@@ -248,10 +385,11 @@ def read_analysis_for_export(analysis) -> dict:
 
     simulation = members.simulations[0] if members.simulations else None
     grid = members.grids[0] if members.grids else None
-    boundary = members.boundaries[0] if members.boundaries else None
+    legacy_boundary = members.boundaries[0] if members.boundaries else None
     material_entries = [_material_to_dict(m) for m in members.materials]
     geometry_objects = _collect_geometry_objects(analysis)
     simulation_box = refresh_simulation_box_for_analysis(analysis)
+    boundary = _resolve_boundary_for_export(analysis, legacy_boundary)
     material_assignments = []
 
     for material in material_entries:
@@ -299,12 +437,7 @@ def read_analysis_for_export(analysis) -> dict:
         )
         if grid is not None
         else {},
-        "boundary": _object_to_dict(
-            boundary,
-            ["XMin", "XMax", "YMin", "YMax", "ZMin", "ZMax", "PMLCells"],
-        )
-        if boundary is not None
-        else {},
+        "boundary": boundary,
         "materials": material_entries,
         "material_assignments": material_assignments,
         "ports": [

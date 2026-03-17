@@ -26,8 +26,8 @@ def test_analysis_proxy_refreshes_simulation_box_on_group_change(monkeypatch):
 
     calls = []
 
-    def _fake_refresh(analysis, force_zero_margin=False):
-        calls.append(force_zero_margin)
+    def _fake_refresh(analysis):
+        calls.append(analysis)
         return {}
 
     monkeypatch.setattr(
@@ -41,7 +41,7 @@ def test_analysis_proxy_refreshes_simulation_box_on_group_change(monkeypatch):
 
     proxy.onChanged(analysis, "Group")
 
-    assert calls == [False]
+    assert calls == [analysis]
 
 
 def test_analysis_proxy_skips_refresh_while_restoring(monkeypatch):
@@ -49,8 +49,8 @@ def test_analysis_proxy_skips_refresh_while_restoring(monkeypatch):
 
     calls = []
 
-    def _fake_refresh(analysis, force_zero_margin=False):
-        calls.append(force_zero_margin)
+    def _fake_refresh(analysis):
+        calls.append(analysis)
         return {}
 
     monkeypatch.setattr(
@@ -73,8 +73,8 @@ def test_analysis_proxy_skips_refresh_when_group_refresh_is_suppressed(monkeypat
 
     calls = []
 
-    def _fake_refresh(analysis, force_zero_margin=False):
-        calls.append(force_zero_margin)
+    def _fake_refresh(analysis):
+        calls.append(analysis)
         return {}
 
     monkeypatch.setattr(

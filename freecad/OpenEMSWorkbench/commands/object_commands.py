@@ -58,9 +58,19 @@ except ImportError:
     from OpenEMSWorkbench.validation import format_findings, run_preflight, summarize_findings
 
 try:
+    from model import BOUNDARY_TYPES
+except ImportError:
+    from OpenEMSWorkbench.model import BOUNDARY_TYPES
+
+try:
     from exporter import export_analysis_dry_run
 except ImportError:
     from OpenEMSWorkbench.exporter import export_analysis_dry_run
+
+try:
+    from exporter.document_reader import ensure_simulation_box_properties
+except ImportError:
+    from OpenEMSWorkbench.exporter.document_reader import ensure_simulation_box_properties
 
 try:
     from meshing import MeshResolutionError, build_mesh_for_active_analysis
@@ -134,6 +144,7 @@ COMMAND_DEFINITIONS = {
 EDIT_COMMAND_NAME = "OpenEMS_EditSelected"
 SET_ACTIVE_ANALYSIS_COMMAND = "OpenEMS_SetActiveAnalysis"
 ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND = "OpenEMS_AssignSelectedToActiveAnalysis"
+ASSIGN_BOUNDARY_TO_SELECTED_FACE_COMMAND = "OpenEMS_AssignBoundaryToSelectedFace"
 RUN_PREFLIGHT_COMMAND = "OpenEMS_RunPreflight"
 EXPORT_DRY_RUN_COMMAND = "OpenEMS_ExportDryRun"
 RUN_SIMULATION_COMMAND = "OpenEMS_RunSimulation"
@@ -146,6 +157,7 @@ COMMAND_ICON_FILES = {
     EDIT_COMMAND_NAME: "command-edit-selected.svg",
     SET_ACTIVE_ANALYSIS_COMMAND: "command-set-active-analysis.svg",
     ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND: "command-assign-selected.svg",
+    ASSIGN_BOUNDARY_TO_SELECTED_FACE_COMMAND: "command-create-boundary.svg",
     RUN_PREFLIGHT_COMMAND: "command-run-preflight.svg",
     EXPORT_DRY_RUN_COMMAND: "command-export-dry-run.svg",
     RUN_SIMULATION_COMMAND: "command-run-simulation.svg",
@@ -159,6 +171,7 @@ CREATE_COMMANDS = list(COMMAND_DEFINITIONS.keys())
 ANALYSIS_COMMANDS = [
     SET_ACTIVE_ANALYSIS_COMMAND,
     ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND,
+    ASSIGN_BOUNDARY_TO_SELECTED_FACE_COMMAND,
     EDIT_COMMAND_NAME,
 ]
 RUN_COMMANDS = [
@@ -280,6 +293,50 @@ def _analysis_simulation(analysis):
         if get_proxy_type(member) == "OpenEMS_Simulation":
             return member
     return None
+
+
+def _is_simulation_box_object(obj) -> bool:
+    return bool(getattr(obj, "OpenEMSSimulationBox", False))
+
+
+def _coord(value, lower_name: str, upper_name: str):
+    if value is None:
+        return None
+    if hasattr(value, lower_name):
+        return float(getattr(value, lower_name))
+    if hasattr(value, upper_name):
+        return float(getattr(value, upper_name))
+    return None
+
+
+def _boundary_property_for_selected_face(box_obj, face_name: str, face_obj=None) -> str | None:
+    bb = getattr(getattr(box_obj, "Shape", None), "BoundBox", None)
+    cm = getattr(face_obj, "CenterOfMass", None)
+
+    if bb is not None and cm is not None:
+        x = _coord(cm, "x", "X")
+        y = _coord(cm, "y", "Y")
+        z = _coord(cm, "z", "Z")
+        if x is not None and y is not None and z is not None:
+            distances = {
+                "BoundaryXMin": abs(x - float(bb.XMin)),
+                "BoundaryXMax": abs(x - float(bb.XMax)),
+                "BoundaryYMin": abs(y - float(bb.YMin)),
+                "BoundaryYMax": abs(y - float(bb.YMax)),
+                "BoundaryZMin": abs(z - float(bb.ZMin)),
+                "BoundaryZMax": abs(z - float(bb.ZMax)),
+            }
+            return min(distances, key=distances.get)
+
+    fallback = {
+        "Face1": "BoundaryZMin",
+        "Face2": "BoundaryZMax",
+        "Face3": "BoundaryYMin",
+        "Face4": "BoundaryYMax",
+        "Face5": "BoundaryXMin",
+        "Face6": "BoundaryXMax",
+    }
+    return fallback.get(str(face_name))
 
 
 def _resolve_export_base(analysis) -> str:
@@ -455,6 +512,94 @@ class _AssignSelectedToActiveAnalysisCommand:
             f"'{analysis.Label}': added={details['added']}, "
             f"already_member={details['already_member']}, ignored={details['ignored']}.\n"
         )
+
+    def IsActive(self):
+        return App is not None and Gui is not None and App.ActiveDocument is not None
+
+
+class _AssignBoundaryToSelectedFaceCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Assign Boundary To Face",
+            "ToolTip": "Assign boundary condition to selected simulation-box face(s).",
+            "Pixmap": _command_icon(ASSIGN_BOUNDARY_TO_SELECTED_FACE_COMMAND),
+        }
+
+    def Activated(self):
+        if App is None or Gui is None:
+            return
+        if QtWidgets is None:
+            App.Console.PrintError("OpenEMS: Qt runtime is unavailable for boundary selection.\n")
+            return
+        doc = App.ActiveDocument
+        if doc is None:
+            App.Console.PrintError("OpenEMS: No active document. Create a document first.\n")
+            return
+
+        selection_ex = Gui.Selection.getSelectionEx() or []
+        if not selection_ex:
+            App.Console.PrintError("OpenEMS: Select one or more simulation-box faces first.\n")
+            return
+
+        boundary_type, ok = QtWidgets.QInputDialog.getItem(
+            None,
+            "Assign Boundary To Face",
+            "Boundary type:",
+            BOUNDARY_TYPES,
+            0,
+            False,
+        )
+        if not ok:
+            App.Console.PrintMessage("OpenEMS: Boundary face assignment canceled.\n")
+            return
+
+        changed = 0
+        skipped = 0
+        touched_objects = set()
+
+        for item in selection_ex:
+            box_obj = getattr(item, "Object", None)
+            if not _is_simulation_box_object(box_obj):
+                skipped += 1
+                continue
+
+            ensure_simulation_box_properties(box_obj)
+
+            names = list(getattr(item, "SubElementNames", []) or [])
+            subobjs = list(getattr(item, "SubObjects", []) or [])
+            face_pairs = []
+            for idx, name in enumerate(names):
+                if str(name).startswith("Face"):
+                    face_obj = subobjs[idx] if idx < len(subobjs) else None
+                    face_pairs.append((name, face_obj))
+
+            if not face_pairs:
+                skipped += 1
+                continue
+
+            for face_name, face_obj in face_pairs:
+                prop_name = _boundary_property_for_selected_face(box_obj, face_name, face_obj)
+                if not prop_name or not hasattr(box_obj, prop_name):
+                    skipped += 1
+                    continue
+                setattr(box_obj, prop_name, str(boundary_type))
+                changed += 1
+                touched_objects.add(getattr(box_obj, "Name", "box"))
+
+        if changed:
+            doc.recompute()
+            App.Console.PrintMessage(
+                "OpenEMS: Assigned boundary "
+                f"'{boundary_type}' to {changed} face(s) on {len(touched_objects)} simulation box object(s).\n"
+            )
+        else:
+            App.Console.PrintError(
+                "OpenEMS: No simulation-box faces were updated. "
+                "Select simulation box faces and try again.\n"
+            )
+
+        if skipped:
+            App.Console.PrintMessage(f"OpenEMS: Skipped {skipped} selection item(s).\n")
 
     def IsActive(self):
         return App is not None and Gui is not None and App.ActiveDocument is not None
@@ -894,6 +1039,19 @@ def register_object_commands() -> list[str]:
         if App is not None:
             App.Console.PrintError(
                 f"OpenEMS: Failed to register command '{ASSIGN_TO_ACTIVE_ANALYSIS_COMMAND}': {exc}\n"
+            )
+
+    try:
+        if ASSIGN_BOUNDARY_TO_SELECTED_FACE_COMMAND not in Gui.listCommands():
+            Gui.addCommand(
+                ASSIGN_BOUNDARY_TO_SELECTED_FACE_COMMAND,
+                _AssignBoundaryToSelectedFaceCommand(),
+            )
+        registered.append(ASSIGN_BOUNDARY_TO_SELECTED_FACE_COMMAND)
+    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
+        if App is not None:
+            App.Console.PrintError(
+                f"OpenEMS: Failed to register command '{ASSIGN_BOUNDARY_TO_SELECTED_FACE_COMMAND}': {exc}\n"
             )
 
     try:
