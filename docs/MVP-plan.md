@@ -130,28 +130,31 @@ Commit-sized tasks:
 3. Commit 3.3: Generate real material definitions and bind primitives to those materials.
 4. Commit 3.4: Keep STL fallback path and add tests that cover both direct and fallback export.
 
-### Phase 4: compute simulation box and units automatically
+### Phase 4: Configure simulation bounding box and units
 
-The simulation space should be built automatically from the geometry included in the analysis, with consistent unit conversion from FreeCAD to openEMS.
+The simulation space should be built automatically from the geometry included in the analysis, with consistent unit conversion from FreeCAD to openEMS. The bounding box will be displayed in FreeCAD as a box with configurable dimensions, but by default will include the simulation geometry with no margins. Boundary conditions will be assigned to this boundary box by means of clicking on a face and selecting the appropriate boundary condition. The boundary conditions will then be exported to the python script for the openEMS simulation using the exporter.
 
 This phase should:
 
 - Compute the bounding box of the full geometry in the analysis.
-- Add a configurable margin around it.
-- Use that box consistently for the simulation region.
-- Use it for boundaries and mesh extent.
-- Define one clear unit-conversion path and apply it everywhere in export and run.
+- Show this simulation box in FreeCAD as an editable object with configurable dimensions.
+- Default to no margin so the box initially matches the included simulation geometry.
+- Let the user assign boundary conditions by selecting a box face and choosing a boundary type.
+- Export the selected face boundary conditions into the generated openEMS Python script.
+- Define one clear unit-conversion path from FreeCAD units to openEMS units and apply it everywhere in export and run.
 
 Reason:
 
-This matches the intended workflow and reduces manual work for the user.
+This matches the intended workflow: users can see and edit the simulation region directly in FreeCAD, assign boundaries interactively, and trust that the exported script reflects exactly what they configured.
 
 Commit-sized tasks:
 
-1. Commit 4.1: Compute analysis geometry bounding box and add a configurable margin.
-2. Commit 4.2: Apply the computed box consistently to simulation region and boundary setup.
-3. Commit 4.3: Implement one unit-conversion utility and use it in exporter and run pipeline.
-4. Commit 4.4: Add tests for unit conversion consistency using millimeter-based input geometry.
+1. Commit 4.1: Compute the analysis geometry bounding box and create/update a visible simulation-box object that defaults to tight fit (no margin).
+2. Commit 4.2: Add simulation-box editing support in FreeCAD so dimensions can be adjusted when needed.
+3. Commit 4.3: Implement face-based boundary assignment workflow on the simulation box and store per-face boundary settings persistently.
+4. Commit 4.4: Export per-face boundary settings from the simulation box into real openEMS boundary commands in the generated Python script.
+5. Commit 4.5: Enforce one explicit unit contract so the units shown in FreeCAD are the exact same units openEMS reads from the exported Python input (no hidden scale mismatch), and apply this consistently in geometry, boundary coordinates, exporter, and run pipeline.
+6. Commit 4.6: Add tests for box generation defaults, face boundary persistence/export mapping, and unit-conversion consistency (including millimeter-based input geometry).
 
 ### Phase 5: connect mesh to the real model extent
 
