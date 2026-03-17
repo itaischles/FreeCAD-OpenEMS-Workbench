@@ -327,7 +327,7 @@ def test_document_reader_uses_simulation_box_boundaries_for_export():
     assert boundary["PMLCells"] == 12
 
 
-def test_document_reader_falls_back_to_legacy_boundary_when_no_sim_box():
+def test_document_reader_ignores_legacy_boundary_when_no_sim_box():
     from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
 
     legacy_boundary = OpenEMSObj(
@@ -347,6 +347,41 @@ def test_document_reader_falls_back_to_legacy_boundary_when_no_sim_box():
             OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.0),
             OpenEMSObj("Grid", "OpenEMS_Grid"),
             legacy_boundary,
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    boundary = extracted["boundary"]
+
+    assert boundary == {}
+
+
+def test_document_reader_migrates_legacy_boundary_values_to_simulation_box():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    geo = GeoObjWithBounds("GeoA", 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+    helper_box = GeoObjWithBounds("OpenEMSSimulationBox", -1.0, -1.0, -1.0, 2.0, 2.0, 2.0)
+    helper_box.OpenEMSSimulationBox = True
+
+    legacy_boundary = OpenEMSObj(
+        "Bnd",
+        "OpenEMS_Boundary",
+        XMin="MUR",
+        XMax="PEC",
+        YMin="PMC",
+        YMax="PML_8",
+        ZMin="PEC",
+        ZMax="PML_8",
+        PMLCells=9,
+    )
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.0),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            legacy_boundary,
+            geo,
+            helper_box,
         ]
     )
 

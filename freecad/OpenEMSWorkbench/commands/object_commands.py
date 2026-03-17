@@ -17,7 +17,6 @@ except Exception:  # pragma: no cover - FreeCAD runtime only
 try:
     from objects import (
         create_analysis,
-        create_boundary,
         create_dumpbox,
         create_grid,
         create_material,
@@ -27,7 +26,6 @@ try:
 except ImportError:
     from OpenEMSWorkbench.objects import (
         create_analysis,
-        create_boundary,
         create_dumpbox,
         create_grid,
         create_material,
@@ -114,12 +112,6 @@ COMMAND_DEFINITIONS = {
         "tooltip": "Create an openEMS material object.",
         "icon": "command-create-material.svg",
         "factory": create_material,
-    },
-    "OpenEMS_CreateBoundary": {
-        "menu_text": "Create Boundary",
-        "tooltip": "Create an openEMS boundary object.",
-        "icon": "command-create-boundary.svg",
-        "factory": create_boundary,
     },
     "OpenEMS_CreatePort": {
         "menu_text": "Create Port",

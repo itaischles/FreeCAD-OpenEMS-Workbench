@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 try:
-    from gui.task_panels.boundary_panel import BoundaryTaskPanel
     from gui.task_panels.dumpbox_panel import DumpBoxTaskPanel
     from gui.task_panels.grid_panel import GridTaskPanel
     from gui.task_panels.material_panel import MaterialTaskPanel
     from gui.task_panels.port_panel import PortTaskPanel
     from gui.task_panels.simulation_panel import SimulationTaskPanel
 except ImportError:
-    from OpenEMSWorkbench.gui.task_panels.boundary_panel import BoundaryTaskPanel
     from OpenEMSWorkbench.gui.task_panels.dumpbox_panel import DumpBoxTaskPanel
     from OpenEMSWorkbench.gui.task_panels.grid_panel import GridTaskPanel
     from OpenEMSWorkbench.gui.task_panels.material_panel import MaterialTaskPanel
@@ -19,7 +17,6 @@ except ImportError:
 PANEL_BY_PROXY_TYPE = {
     "OpenEMS_Simulation": SimulationTaskPanel,
     "OpenEMS_Material": MaterialTaskPanel,
-    "OpenEMS_Boundary": BoundaryTaskPanel,
     "OpenEMS_Port": PortTaskPanel,
     "OpenEMS_Grid": GridTaskPanel,
     "OpenEMS_DumpBox": DumpBoxTaskPanel,

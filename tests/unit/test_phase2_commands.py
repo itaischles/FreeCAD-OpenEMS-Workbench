@@ -16,7 +16,6 @@ def test_workbench_command_registry_contains_phase2_commands():
         "OpenEMS_CreateAnalysis",
         "OpenEMS_CreateSimulation",
         "OpenEMS_CreateMaterial",
-        "OpenEMS_CreateBoundary",
         "OpenEMS_CreatePort",
         "OpenEMS_CreateGrid",
         "OpenEMS_CreateDumpBox",
@@ -68,7 +67,7 @@ def test_flat_command_order_matches_group_layout():
 def test_object_command_definitions_exist():
     from OpenEMSWorkbench.commands.object_commands import COMMAND_DEFINITIONS, EDIT_COMMAND_NAME
 
-    assert len(COMMAND_DEFINITIONS) == 7
+    assert len(COMMAND_DEFINITIONS) == 6
     assert "OpenEMS_CreateAnalysis" in COMMAND_DEFINITIONS
     assert "OpenEMS_CreateSimulation" in COMMAND_DEFINITIONS
     assert "icon" in COMMAND_DEFINITIONS["OpenEMS_CreateSimulation"]

@@ -24,10 +24,15 @@ def test_registry_resolves_known_proxy_types():
 
     assert get_panel_class_for_object(_Obj("OpenEMS_Simulation")) is not None
     assert get_panel_class_for_object(_Obj("OpenEMS_Material")) is not None
-    assert get_panel_class_for_object(_Obj("OpenEMS_Boundary")) is not None
     assert get_panel_class_for_object(_Obj("OpenEMS_Port")) is not None
     assert get_panel_class_for_object(_Obj("OpenEMS_Grid")) is not None
     assert get_panel_class_for_object(_Obj("OpenEMS_DumpBox")) is not None
+
+
+def test_registry_returns_none_for_legacy_boundary_proxy_type():
+    from OpenEMSWorkbench.gui.task_panels.panel_registry import get_panel_class_for_object
+
+    assert get_panel_class_for_object(_Obj("OpenEMS_Boundary")) is None
 
 
 def test_registry_returns_none_for_unknown_proxy_type():

@@ -47,7 +47,6 @@ def _minimal_valid_analysis():
     )
     grid = Obj("Grid", "OpenEMS_Grid", CoordinateSystem="Cartesian")
     mat = Obj("Material", "OpenEMS_Material")
-    bnd = Obj("Boundary", "OpenEMS_Boundary")
     port = Obj(
         "Port1",
         "OpenEMS_Port",
@@ -64,7 +63,7 @@ def _minimal_valid_analysis():
         PortStopZ=1.0,
     )
     dump = Obj("Dump", "OpenEMS_DumpBox", FrequencySpec="1e9,2e9")
-    return Analysis([sim, grid, mat, bnd, port, dump])
+    return Analysis([sim, grid, mat, port, dump])
 
 
 def test_preflight_passes_minimal_valid_setup():
@@ -115,7 +114,7 @@ def test_preflight_blocks_non_lumped_port_type_in_mvp():
     from OpenEMSWorkbench.validation.preflight import run_preflight
 
     analysis = _minimal_valid_analysis()
-    port = analysis.Group[4]
+    port = analysis.Group[3]
     port.PortType = "Waveguide"
     findings = run_preflight(analysis)
     assert any(f.check_id == "port.type_supported" for f in findings)
@@ -135,7 +134,7 @@ def test_preflight_requires_single_excited_port():
     from OpenEMSWorkbench.validation.preflight import run_preflight
 
     analysis = _minimal_valid_analysis()
-    port = analysis.Group[4]
+    port = analysis.Group[3]
     port.Excite = False
     findings = run_preflight(analysis)
     assert any(f.check_id == "port.single_excitation_source" for f in findings)
@@ -145,7 +144,7 @@ def test_preflight_requires_span_on_excitation_axis():
     from OpenEMSWorkbench.validation.preflight import run_preflight
 
     analysis = _minimal_valid_analysis()
-    port = analysis.Group[4]
+    port = analysis.Group[3]
     port.PropagationDirection = "+z"
     port.PortStartZ = 0.0
     port.PortStopZ = 0.0

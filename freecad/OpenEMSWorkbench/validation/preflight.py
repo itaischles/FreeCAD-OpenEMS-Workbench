@@ -67,14 +67,6 @@ def _check_required_counts(members) -> list[PreflightFinding]:
                 "Analysis must contain at least one Material object.",
             )
         )
-    if len(members.boundaries) != 1:
-        findings.append(
-            _finding(
-                "error",
-                "required.boundary_count",
-                f"Analysis must contain exactly one Boundary object, found {len(members.boundaries)}.",
-            )
-        )
     if len(members.ports) < 1:
         findings.append(
             _finding(
@@ -124,6 +116,24 @@ def _check_coordinate_system(members) -> list[PreflightFinding]:
                 grid,
             )
         )
+    return findings
+
+
+def _check_legacy_boundary_objects(members) -> list[PreflightFinding]:
+    findings: list[PreflightFinding] = []
+    if not members.boundaries:
+        return findings
+
+    findings.append(
+        _finding(
+            "warning",
+            "legacy.boundary_object_present",
+            (
+                f"Found {len(members.boundaries)} legacy Boundary object(s). "
+                "Boundary settings are now sourced from the simulation box faces."
+            ),
+        )
+    )
     return findings
 
 
@@ -477,6 +487,7 @@ def run_preflight(analysis: Any) -> list[PreflightFinding]:
     members = collect_members(analysis)
     findings: list[PreflightFinding] = []
     findings.extend(_check_required_counts(members))
+    findings.extend(_check_legacy_boundary_objects(members))
     findings.extend(_check_port_numbers(members))
     findings.extend(_check_coordinate_system(members))
     findings.extend(_check_dumpbox_frequency(members))

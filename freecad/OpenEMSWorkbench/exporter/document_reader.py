@@ -279,19 +279,73 @@ def read_simulation_box_boundary_settings(obj) -> dict:
     }
 
 
-def _resolve_boundary_for_export(analysis, legacy_boundary) -> dict:
+def _read_legacy_boundary_settings(legacy_boundary) -> dict:
+    if legacy_boundary is None:
+        return {}
+    return {
+        "XMin": str(getattr(legacy_boundary, "XMin", DEFAULTS["boundary"]["xmin"]) or DEFAULTS["boundary"]["xmin"]),
+        "XMax": str(getattr(legacy_boundary, "XMax", DEFAULTS["boundary"]["xmax"]) or DEFAULTS["boundary"]["xmax"]),
+        "YMin": str(getattr(legacy_boundary, "YMin", DEFAULTS["boundary"]["ymin"]) or DEFAULTS["boundary"]["ymin"]),
+        "YMax": str(getattr(legacy_boundary, "YMax", DEFAULTS["boundary"]["ymax"]) or DEFAULTS["boundary"]["ymax"]),
+        "ZMin": str(getattr(legacy_boundary, "ZMin", DEFAULTS["boundary"]["zmin"]) or DEFAULTS["boundary"]["zmin"]),
+        "ZMax": str(getattr(legacy_boundary, "ZMax", DEFAULTS["boundary"]["zmax"]) or DEFAULTS["boundary"]["zmax"]),
+        "PMLCells": int(getattr(legacy_boundary, "PMLCells", DEFAULTS["boundary"]["pml_cells"]) or DEFAULTS["boundary"]["pml_cells"]),
+    }
+
+
+def _migrate_legacy_boundary_to_box(box_obj, legacy_boundary) -> None:
+    if box_obj is None or legacy_boundary is None:
+        return
+
+    ensure_simulation_box_properties(box_obj)
+    legacy = _read_legacy_boundary_settings(legacy_boundary)
+    if not legacy:
+        return
+
+    current = read_simulation_box_boundary_settings(box_obj)
+    defaults = {
+        "XMin": DEFAULTS["boundary"]["xmin"],
+        "XMax": DEFAULTS["boundary"]["xmax"],
+        "YMin": DEFAULTS["boundary"]["ymin"],
+        "YMax": DEFAULTS["boundary"]["ymax"],
+        "ZMin": DEFAULTS["boundary"]["zmin"],
+        "ZMax": DEFAULTS["boundary"]["zmax"],
+    }
+
+    face_props = {
+        "XMin": "BoundaryXMin",
+        "XMax": "BoundaryXMax",
+        "YMin": "BoundaryYMin",
+        "YMax": "BoundaryYMax",
+        "ZMin": "BoundaryZMin",
+        "ZMax": "BoundaryZMax",
+    }
+
+    for axis_key, prop_name in face_props.items():
+        legacy_value = str(legacy.get(axis_key, defaults[axis_key]))
+        current_value = str(current.get(axis_key, defaults[axis_key]))
+        if current_value == defaults[axis_key] and legacy_value != defaults[axis_key]:
+            try:
+                setattr(box_obj, prop_name, legacy_value)
+            except Exception:
+                pass
+
+    try:
+        current_pml = int(current.get("PMLCells", DEFAULTS["boundary"]["pml_cells"]))
+        legacy_pml = int(legacy.get("PMLCells", DEFAULTS["boundary"]["pml_cells"]))
+        default_pml = int(DEFAULTS["boundary"]["pml_cells"])
+        if current_pml == default_pml and legacy_pml != default_pml:
+            box_obj.BoundaryPMLCells = legacy_pml
+    except Exception:
+        pass
+
+
+def _resolve_boundary_for_export(analysis) -> dict:
     box_obj = _find_simulation_box_object(analysis)
     if box_obj is not None:
         ensure_simulation_box_properties(box_obj)
         return read_simulation_box_boundary_settings(box_obj)
-
-    if legacy_boundary is None:
-        return {}
-
-    return _object_to_dict(
-        legacy_boundary,
-        ["XMin", "XMax", "YMin", "YMax", "ZMin", "ZMax", "PMLCells"],
-    )
+    return {}
 
 
 def _read_margin_from_box(box_obj, default_margin: float = 0.0) -> float:
@@ -402,7 +456,9 @@ def read_analysis_for_export(analysis) -> dict:
     material_entries = [_material_to_dict(m) for m in members.materials]
     geometry_objects = _collect_geometry_objects(analysis)
     simulation_box = refresh_simulation_box_for_analysis(analysis)
-    boundary = _resolve_boundary_for_export(analysis, legacy_boundary)
+    box_obj = _find_simulation_box_object(analysis)
+    _migrate_legacy_boundary_to_box(box_obj, legacy_boundary)
+    boundary = _resolve_boundary_for_export(analysis)
     material_assignments = []
 
     for material in material_entries:
