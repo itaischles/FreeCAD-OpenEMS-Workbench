@@ -284,30 +284,42 @@ Commit-sized tasks:
 4. Commit 7.4: Add export and preflight checks for reader availability, missing STL files, empty or invalid STL artifacts, and clear user-facing failure messages.
 5. Commit 7.5: Add tests for valid STL-backed export, preserved material and priority binding, reader-unavailable behavior, and invalid artifact handling.
 
-### Phase 8: add excitation setup support
+### Phase 8: add explicit temporal excitation behavior and automatic timestep budgeting
 
-The coax target also needs real excitation setup, but this should stay separate from the waveguide spatial setup.
+The coax workflow also needs explicit control of source behavior in time, but this must stay separate from the Phase 6 waveguide spatial setup.
 
 This phase should:
 
-- Add sinusoidal excitation as a real supported simulation option.
-- Keep Gaussian excitation working.
-- Validate excitation parameters properly.
-- Support clear setup of excitation time profile and source magnitude.
-- Export the correct openEMS excitation call.
-- Remove temporary unsupported-excitation placeholder branches once excitation export is fully integrated.
+- Let the user choose excitation type in the simulation task panel (Sinusoid, Gaussian, and a modular custom-expression path).
+- Show excitation parameters that depend on the selected functional form.
+- Keep `f_max` mandatory even when the waveform is fully defined, because it is still needed for solver frequency-content and sampling/stability context.
+- Let the user define a physical maximum simulation time (for example `100 ns`) instead of manually guessing timestep count.
+- Compute a stable timestep estimate from mesh constraints and compute `NrTS = ceil(T_max / dt)` automatically.
+- Store and show the computed timestep and computed timestep budget on the simulation object so users can inspect what will be used.
+- Export one consistent excitation path to openEMS while preserving compatibility with current behavior.
 
 Reason:
 
-This phase is about how the source behaves in time. It should stay separate from the Phase 6 work that defines where the source is attached and what spatial field pattern it uses.
+This phase is about temporal behavior and simulation duration budgeting. It should remain independent from Phase 6, which defines where the source is located and what spatial field pattern is injected.
+
+Recommended MVP target:
+
+- Introduce one internal waveform abstraction in the workbench so new waveform families can be added without changing exporter architecture.
+- Use native openEMS calls for built-in Sinusoid and Gaussian in MVP (`SetSinusExcite`, `SetGaussExcite`) to keep behavior predictable and lower risk.
+- Add a custom-expression backend (`SetCustomExcite`) as the modular extension path, with explicit safeguards:
+- Always set a bounded timestep count (`NrTS`) for custom excitation to avoid unbounded precomputation.
+- Encode custom expression payloads in the format expected by the Python binding.
+- Export both `NrTS` and `MaxTime` from the same user-selected `T_max` contract for robust run limiting.
 
 Commit-sized tasks:
 
-1. Commit 8.1: Extend the simulation model and panel so excitation type, main frequency settings, and source magnitude are clearly defined.
-2. Commit 8.2: Add preflight checks for valid Gaussian and sinusoidal excitation settings.
-3. Commit 8.3: Map excitation modes to the correct openEMS script calls while preserving the Phase 6 waveguide spatial setup.
-4. Commit 8.4: Add tests for Gaussian and sinusoidal export paths.
-5. Commit 8.5: Remove legacy placeholder excitation branches and keep one clean excitation path set.
+1. Commit 8.1: Extend the simulation model and task panel with excitation-type dropdown, per-type parameter groups, mandatory `f_max`, and user-defined physical `T_max`.
+2. Commit 8.2: Add deterministic timestep-budget computation (`dt`, `NrTS`) from mesh and `T_max`, and expose computed values in the simulation object/panel.
+3. Commit 8.3: Add preflight checks for per-type parameter validity, mandatory `f_max`, valid `T_max`, and finite computed `dt`/`NrTS`.
+4. Commit 8.4: Refactor exporter excitation architecture to use one internal waveform abstraction with pluggable backends (native Sinusoid/Gaussian now, custom-expression backend enabled).
+5. Commit 8.5: Export run limits consistently from the new contract (`NrTS` derived from `T_max` and computed `dt`, plus exported `MaxTime`) and keep `EndCriteria` behavior.
+6. Commit 8.6: Add tests for panel conditional behavior, timestep-budget calculation, preflight validation, and script generation for Sinusoid/Gaussian/custom backends.
+7. Commit 8.7: Remove legacy placeholder excitation branches and finalize one clean excitation pipeline with backward compatibility for existing documents.
 
 ### Phase 9: make dump boxes generate real field output
 
