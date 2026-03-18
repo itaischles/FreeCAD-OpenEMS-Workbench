@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 
 def _as_float(value, default: float = 0.0) -> float:
     try:
@@ -14,6 +16,25 @@ def _is_pec(material: dict) -> bool:
 
 def _epsilon_r(material: dict) -> float:
     return _as_float(material.get("EpsilonR", 0.0), 0.0)
+
+
+def coax_impedance_ohm(r_in: float, r_out: float, epsilon_r: float) -> float | None:
+    """Return coaxial TEM characteristic impedance in Ohms for valid geometric/material inputs."""
+    inner = _as_float(r_in, 0.0)
+    outer = _as_float(r_out, 0.0)
+    eps_r = _as_float(epsilon_r, 0.0)
+
+    if inner <= 0.0 or outer <= inner or eps_r <= 0.0:
+        return None
+
+    try:
+        value = (60.0 / math.sqrt(eps_r)) * math.log(outer / inner)
+    except Exception:
+        return None
+
+    if not math.isfinite(value) or value <= 0.0:
+        return None
+    return value
 
 
 def infer_coax_from_waveguide_detection(
@@ -85,6 +106,13 @@ def infer_coax_from_waveguide_detection(
             "reason": "dielectric_epsilon_invalid",
         }
 
+    z0_ohm = coax_impedance_ohm(r_in=r_in, r_out=r_out, epsilon_r=epsilon_r)
+    if z0_ohm is None:
+        return {
+            "status": "unsupported",
+            "reason": "coax_impedance_invalid",
+        }
+
     return {
         "status": "supported",
         "kind": "coax_axis_aligned",
@@ -92,10 +120,11 @@ def infer_coax_from_waveguide_detection(
         "r_in": r_in,
         "r_out": r_out,
         "dielectric_epsilon_r": epsilon_r,
+        "z0_ohm": z0_ohm,
         "inner_conductor_geometry": str(inner.get("geometry_name", "") or ""),
         "outer_conductor_geometry": str(outer.get("geometry_name", "") or ""),
         "dielectric_material_name": dielectric_material_name,
     }
 
 
-__all__ = ["infer_coax_from_waveguide_detection"]
+__all__ = ["coax_impedance_ohm", "infer_coax_from_waveguide_detection"]

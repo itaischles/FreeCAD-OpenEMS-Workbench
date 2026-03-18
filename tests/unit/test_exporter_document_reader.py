@@ -474,6 +474,8 @@ def test_document_reader_normalizes_delta_unit_to_unit_contract():
 
 
 def test_document_reader_detects_supported_waveguide_face_coax_geometry():
+    import math
+
     from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
 
     # Two concentric cylinders crossing the ZMin simulation-box face (z=0).
@@ -552,9 +554,17 @@ def test_document_reader_detects_supported_waveguide_face_coax_geometry():
     assert inferred["r_in"] == 1.0
     assert inferred["r_out"] == 2.0
     assert inferred["dielectric_epsilon_r"] == 2.2
+    assert math.isclose(inferred["z0_ohm"], 28.039184028017946, rel_tol=1e-12, abs_tol=0.0)
     assert inferred["inner_conductor_geometry"] == "InnerPin"
     assert inferred["outer_conductor_geometry"] == "OuterShield"
     assert inferred["dielectric_material_name"] == "MatDielectric"
+
+    contract = port.get("WaveguidePlaneContract")
+    assert contract is not None
+    assert contract["selected_face"] == "ZMin"
+    assert contract["source_offset_cells"] == 3
+    assert contract["reference_offset_cells"] == 4
+    assert contract["expected_inward_direction"] == "+z"
 
 
 def test_document_reader_reports_unsupported_waveguide_face_geometry_when_not_enough_candidates():

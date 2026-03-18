@@ -564,10 +564,26 @@ def read_analysis_for_export(analysis) -> dict:
             ],
         )
         if str(port_data.get("PortType", "")).strip() == "Waveguide":
+            selected_face = str(port_data.get("SimulationBoxFace", "") or "")
+            source_offset_cells = int(port_data.get("SourcePlaneOffsetCells", 0) or 0)
+            expected_inward_direction = {
+                "XMin": "+x",
+                "XMax": "-x",
+                "YMin": "+y",
+                "YMax": "-y",
+                "ZMin": "+z",
+                "ZMax": "-z",
+            }.get(selected_face)
+            port_data["WaveguidePlaneContract"] = {
+                "selected_face": selected_face,
+                "source_offset_cells": source_offset_cells,
+                "reference_offset_cells": source_offset_cells + 1,
+                "expected_inward_direction": expected_inward_direction,
+            }
             waveguide_face_geometry = detect_waveguide_face_geometry(
                 geometry_objects=geometry_objects,
                 simulation_box=simulation_box,
-                selected_face=str(port_data.get("SimulationBoxFace", "") or ""),
+                selected_face=selected_face,
                 material_names_by_geometry=geometry_to_materials,
             )
             port_data["WaveguideFaceGeometry"] = waveguide_face_geometry

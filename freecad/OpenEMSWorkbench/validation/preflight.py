@@ -352,6 +352,14 @@ def _check_port_configuration(analysis: Any, members) -> list[PreflightFinding]:
         "ZMin": "z",
         "ZMax": "z",
     }
+    face_inward_direction = {
+        "XMin": "+x",
+        "XMax": "-x",
+        "YMin": "+y",
+        "YMax": "-y",
+        "ZMin": "+z",
+        "ZMax": "-z",
+    }
     excited_count = 0
 
     extracted = {}
@@ -472,6 +480,29 @@ def _check_port_configuration(analysis: Any, members) -> list[PreflightFinding]:
             extracted_port = extracted_ports_by_name.get(str(getattr(port, "Name", "") or ""), {})
             detection = extracted_port.get("WaveguideFaceGeometry") or {}
             inference = extracted_port.get("WaveguideCoaxInference") or {}
+            expected_direction = face_inward_direction.get(selected_face)
+
+            if expected_direction is None:
+                findings.append(
+                    _finding(
+                        "error",
+                        "port.waveguide_face_valid",
+                        "Waveguide port must select a valid simulation-box face (XMin/XMax/YMin/YMax/ZMin/ZMax).",
+                        port,
+                    )
+                )
+            elif direction != expected_direction:
+                findings.append(
+                    _finding(
+                        "error",
+                        "port.waveguide_direction_inward",
+                        (
+                            f"Waveguide propagation direction must point inward from face '{selected_face}'. "
+                            f"Expected '{expected_direction}' but got '{direction}'."
+                        ),
+                        port,
+                    )
+                )
 
             if str(detection.get("status", "")) != "supported":
                 reason = str(detection.get("reason", "unknown") or "unknown")
@@ -533,6 +564,40 @@ def _check_port_configuration(analysis: Any, members) -> list[PreflightFinding]:
                             port,
                         )
                     )
+                else:
+                    source_index = offset_cells if selected_face.endswith("Min") else (len(axis_values) - 1) - offset_cells
+                    reference_index = source_index + 1 if selected_face.endswith("Min") else source_index - 1
+                    if reference_index < 0 or reference_index >= len(axis_values):
+                        findings.append(
+                            _finding(
+                                "error",
+                                "port.waveguide_reference_plane_defined",
+                                (
+                                    "Waveguide probing/reference plane is not available one mesh cell farther inward "
+                                    f"from the source plane for face '{selected_face}'."
+                                ),
+                                port,
+                            )
+                        )
+                    else:
+                        source_coordinate = float(axis_values[source_index])
+                        reference_coordinate = float(axis_values[reference_index])
+                        if selected_face.endswith("Min"):
+                            contract_ok = reference_coordinate > source_coordinate
+                        else:
+                            contract_ok = reference_coordinate < source_coordinate
+                        if not contract_ok:
+                            findings.append(
+                                _finding(
+                                    "error",
+                                    "port.waveguide_three_plane_contract",
+                                    (
+                                        "Waveguide three-plane contract violated: reference plane must be exactly one "
+                                        "mesh cell farther inward from the source plane."
+                                    ),
+                                    port,
+                                )
+                            )
 
         if bool(getattr(port, "Excite", False)):
             excited_count += 1

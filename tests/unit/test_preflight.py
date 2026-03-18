@@ -285,12 +285,38 @@ def test_preflight_allows_waveguide_on_absorbing_boundary_face():
     assert not any(f.check_id == "port.waveguide_boundary_defined" for f in findings)
 
 
+def test_preflight_rejects_waveguide_when_direction_is_not_inward_for_selected_face():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_waveguide_analysis()
+    port = analysis.Group[3]
+    port.SimulationBoxFace = "ZMin"
+    port.PropagationDirection = "-z"
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "port.waveguide_direction_inward" for f in findings)
+
+
 def test_preflight_rejects_waveguide_when_source_offset_exceeds_mesh_cells(monkeypatch):
     from OpenEMSWorkbench.validation import preflight
 
     analysis = _minimal_valid_waveguide_analysis()
     port = analysis.Group[3]
     port.SourcePlaneOffsetCells = 4
+
+    mesh = MeshStub(x=(0.0, 1.0, 2.0), y=(0.0, 1.0, 2.0), z=(0.0, 1.0, 2.0, 3.0, 4.0))
+    monkeypatch.setattr(preflight, "build_mesh_for_analysis", lambda _analysis: (None, None, mesh))
+
+    findings = preflight.run_preflight(analysis)
+    assert any(f.check_id == "port.waveguide_source_plane_offset_safe" for f in findings)
+
+
+def test_preflight_rejects_waveguide_when_reference_plane_is_unavailable(monkeypatch):
+    from OpenEMSWorkbench.validation import preflight
+
+    analysis = _minimal_valid_waveguide_analysis()
+    port = analysis.Group[3]
+    port.SourcePlaneOffsetCells = 9
 
     mesh = MeshStub(x=(0.0, 1.0, 2.0), y=(0.0, 1.0, 2.0), z=(0.0, 1.0, 2.0, 3.0, 4.0))
     monkeypatch.setattr(preflight, "build_mesh_for_analysis", lambda _analysis: (None, None, mesh))

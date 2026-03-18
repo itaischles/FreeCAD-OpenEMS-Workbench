@@ -137,11 +137,13 @@ def _waveguide_summary_text(detection: dict[str, Any] | None, inference: dict[st
 
     if inference:
         if str(inference.get("status", "")) == "supported":
+            z0 = inference.get("z0_ohm")
             lines.append(
                 "Inferred coax: "
                 f"r_in={inference.get('r_in')}, "
                 f"r_out={inference.get('r_out')}, "
-                f"epsilon_r={inference.get('dielectric_epsilon_r')}"
+                f"epsilon_r={inference.get('dielectric_epsilon_r')}, "
+                f"Z0={z0} Ohm"
             )
         else:
             lines.append(f"Coax inference: unsupported ({inference.get('reason', 'unknown')}).")
@@ -156,7 +158,8 @@ def _inferred_coax_report_line(inference: dict[str, Any] | None) -> str | None:
         "Inferred coax: "
         f"r_in={inference.get('r_in')}, "
         f"r_out={inference.get('r_out')}, "
-        f"epsilon_r={inference.get('dielectric_epsilon_r')}"
+        f"epsilon_r={inference.get('dielectric_epsilon_r')}, "
+        f"Z0={inference.get('z0_ohm')} Ohm"
     )
 
 
@@ -288,6 +291,25 @@ class PortTaskPanel(BaseObjectTaskPanel):
             return str(getattr(self.obj, "SimulationBoxFace", "") or "")
         return str(widget.currentText() or "")
 
+    def _apply_inferred_impedance(self, inference: dict[str, Any] | None) -> None:
+        if not inference or str(inference.get("status", "")) != "supported":
+            return
+
+        try:
+            z0 = float(inference.get("z0_ohm"))
+        except Exception:
+            return
+        if z0 <= 0.0:
+            return
+
+        self.obj.Resistance = z0
+        resistance_widget = self._widgets.get("Resistance")
+        if resistance_widget is not None and hasattr(resistance_widget, "setValue"):
+            try:
+                resistance_widget.setValue(z0)
+            except Exception:
+                pass
+
     def _refresh_waveguide_summary(self) -> None:
         if QtWidgets is None:
             return
@@ -319,6 +341,7 @@ class PortTaskPanel(BaseObjectTaskPanel):
             detection=detection,
             materials_by_name=materials_by_name,
         )
+        self._apply_inferred_impedance(inference)
         report_line = _waveguide_report_line(detection, inference)
         if App is not None and hasattr(App, "Console"):
             if report_line is not None:

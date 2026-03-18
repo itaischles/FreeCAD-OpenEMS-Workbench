@@ -107,6 +107,44 @@ def test_compute_source_plane_rejects_non_cartesian_mesh():
     assert plane is None
 
 
+def test_compute_three_plane_contract_for_min_face_uses_next_cell_for_reference():
+    from OpenEMSWorkbench.meshing import MeshLines
+    from OpenEMSWorkbench.objects.port_feature import _compute_waveguide_three_plane_contract
+
+    mesh = MeshLines(
+        coordinate_system="Cartesian",
+        x=(0.0, 1.0, 2.0, 3.0, 4.0),
+        y=(0.0, 1.0),
+        z=(0.0, 1.0),
+    )
+
+    contract = _compute_waveguide_three_plane_contract(mesh, "XMin", 2)
+    assert contract is not None
+    assert contract["inward_direction"] == "+x"
+    assert contract["source_offset_cells"] == 2
+    assert contract["reference_offset_cells"] == 3
+    assert contract["source_plane"]["coordinate"] == 2.0
+    assert contract["reference_plane"]["coordinate"] == 3.0
+
+
+def test_compute_three_plane_contract_for_max_face_uses_next_cell_inward():
+    from OpenEMSWorkbench.meshing import MeshLines
+    from OpenEMSWorkbench.objects.port_feature import _compute_waveguide_three_plane_contract
+
+    mesh = MeshLines(
+        coordinate_system="Cartesian",
+        x=(0.0, 1.0, 2.0, 3.0, 4.0),
+        y=(0.0, 1.0),
+        z=(0.0, 1.0),
+    )
+
+    contract = _compute_waveguide_three_plane_contract(mesh, "XMax", 2)
+    assert contract is not None
+    assert contract["inward_direction"] == "-x"
+    assert contract["source_plane"]["coordinate"] == 2.0
+    assert contract["reference_plane"]["coordinate"] == 1.0
+
+
 def test_source_plane_offset_normalization_clamps_to_range_2_to_9():
     from OpenEMSWorkbench.objects.port_feature import _normalized_source_plane_offset
 

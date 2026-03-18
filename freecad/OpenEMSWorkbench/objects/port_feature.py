@@ -54,6 +54,15 @@ _AXIS_FACE_MAP = {
     "ZMax": ("z", False),
 }
 
+_INWARD_DIRECTION_BY_FACE = {
+    "XMin": "+x",
+    "XMax": "-x",
+    "YMin": "+y",
+    "YMax": "-y",
+    "ZMin": "+z",
+    "ZMax": "-z",
+}
+
 _SOURCE_OFFSET_MIN = 2
 _SOURCE_OFFSET_MAX = 9
 
@@ -95,7 +104,8 @@ def _compute_source_plane_from_mesh(mesh, face_name: str, offset_cells: int) -> 
     if len(axis_values) < 2:
         return None
 
-    clamped_offset = _normalized_source_plane_offset(offset_cells)
+    parsed_offset = _safe_int(offset_cells, DEFAULTS["port"]["source_plane_offset_cells"])
+    clamped_offset = max(_SOURCE_OFFSET_MIN, parsed_offset)
     if from_min:
         index = min(clamped_offset, len(axis_values) - 1)
     else:
@@ -115,6 +125,42 @@ def _compute_source_plane_from_mesh(mesh, face_name: str, offset_cells: int) -> 
         "axis": axis_name,
         "coordinate": axis_value,
         **bounds,
+    }
+
+
+def _waveguide_inward_direction(face_name: str) -> str | None:
+    return _INWARD_DIRECTION_BY_FACE.get(str(face_name or ""))
+
+
+def _compute_waveguide_three_plane_contract(
+    mesh,
+    face_name: str,
+    source_offset_cells: int,
+) -> dict[str, Any] | None:
+    source_plane = _compute_source_plane_from_mesh(mesh, face_name, source_offset_cells)
+    reference_plane = _compute_source_plane_from_mesh(mesh, face_name, _safe_int(source_offset_cells, 0) + 1)
+    if source_plane is None or reference_plane is None:
+        return None
+
+    axis_info = _AXIS_FACE_MAP.get(str(face_name or ""))
+    if axis_info is None:
+        return None
+    _, from_min = axis_info
+
+    source_coordinate = _safe_float(source_plane.get("coordinate"), 0.0)
+    reference_coordinate = _safe_float(reference_plane.get("coordinate"), 0.0)
+    if from_min and reference_coordinate <= source_coordinate:
+        return None
+    if (not from_min) and reference_coordinate >= source_coordinate:
+        return None
+
+    return {
+        "selected_face": str(face_name or ""),
+        "inward_direction": _waveguide_inward_direction(face_name),
+        "source_offset_cells": _safe_int(source_offset_cells, DEFAULTS["port"]["source_plane_offset_cells"]),
+        "reference_offset_cells": _safe_int(source_offset_cells, 0) + 1,
+        "source_plane": source_plane,
+        "reference_plane": reference_plane,
     }
 
 

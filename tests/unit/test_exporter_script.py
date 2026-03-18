@@ -262,3 +262,117 @@ def test_script_generator_rejects_missing_mesh_lines(tmp_path):
         assert False, "Expected missing mesh-lines to raise ValueError"
     except ValueError as exc:
         assert "missing mesh lines" in str(exc).lower()
+
+
+def test_script_generator_exports_tem_field_functions_for_waveguide_coax(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={"ExcitationType": "Gaussian", "ExcitationF0": 1e9, "ExcitationFc": 5e8},
+        grid={"name": "Grid"},
+        simulation_box={
+            "XMin": -5.0,
+            "XMax": 5.0,
+            "YMin": -5.0,
+            "YMax": 5.0,
+            "ZMin": 0.0,
+            "ZMax": 5.0,
+        },
+        mesh_lines={
+            "coordinate_system": "Cartesian",
+            "x": [-5.0, 0.0, 5.0],
+            "y": [-5.0, 0.0, 5.0],
+            "z": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+        },
+        ports=[
+            {
+                "name": "PortWG",
+                "PortType": "Waveguide",
+                "PortNumber": 1,
+                "PropagationDirection": "+z",
+                "SimulationBoxFace": "ZMin",
+                "SourcePlaneOffsetCells": 3,
+                "WaveguidePlaneContract": {
+                    "selected_face": "ZMin",
+                    "source_offset_cells": 3,
+                    "reference_offset_cells": 4,
+                },
+                "WaveguideFaceGeometry": {
+                    "status": "supported",
+                    "inner": {"center": [0.0, 0.0, 2.5]},
+                    "outer": {"center": [0.0, 0.0, 2.5]},
+                },
+                "WaveguideCoaxInference": {
+                    "status": "supported",
+                    "axis": "z",
+                    "r_in": 1.0,
+                    "r_out": 2.0,
+                    "dielectric_epsilon_r": 2.2,
+                    "z0_ohm": 28.039184028017946,
+                },
+            }
+        ],
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_waveguide_tem.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "def port_1_coax_tem_E(x, y, z):" in text
+    assert "def port_1_coax_tem_H(x, y, z):" in text
+    assert "e_mag = 1.0 / (rho * port_1_coax_tem_ln_ba)" in text
+    assert "h_mag = 1.0 / (2.0 * math.pi * port_1_coax_tem_z0 * rho)" in text
+    assert "'source_plane': 3.0" in text
+    assert "'reference_plane': 4.0" in text
+    assert "'E_func': port_1_coax_tem_E" in text
+    assert "'H_func': port_1_coax_tem_H" in text
+    assert "def _add_waveguide_port(fdtd, number, start, stop, direction, excite, e_func, h_func):" in text
+    assert "port_1_waveguide = _add_waveguide_port(FDTD, 1" in text
+    assert "port_1_waveguide_reference_start = [-5.0, -5.0, 4.0]" in text
+    assert "port_1_waveguide_reference_stop = [5.0, 5.0, 4.0]" in text
+
+
+def test_script_generator_skips_waveguide_port_export_when_inference_is_unsupported(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={"ExcitationType": "Gaussian", "ExcitationF0": 1e9, "ExcitationFc": 5e8},
+        grid={"name": "Grid"},
+        simulation_box={
+            "XMin": -5.0,
+            "XMax": 5.0,
+            "YMin": -5.0,
+            "YMax": 5.0,
+            "ZMin": 0.0,
+            "ZMax": 5.0,
+        },
+        mesh_lines={
+            "coordinate_system": "Cartesian",
+            "x": [-5.0, 0.0, 5.0],
+            "y": [-5.0, 0.0, 5.0],
+            "z": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+        },
+        ports=[
+            {
+                "name": "PortWG",
+                "PortType": "Waveguide",
+                "PortNumber": 1,
+                "PropagationDirection": "+z",
+                "SimulationBoxFace": "ZMin",
+                "SourcePlaneOffsetCells": 3,
+                "WaveguideCoaxInference": {
+                    "status": "unsupported",
+                    "reason": "dielectric_material_not_found",
+                },
+            }
+        ],
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_waveguide_invalid.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "TEM field export skipped" in text
+    assert "port_1_waveguide = _add_waveguide_port(" not in text

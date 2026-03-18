@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 try:
@@ -111,6 +112,265 @@ def _safe_symbol(value: str) -> str:
     return symbol or "material"
 
 
+def _coax_center_from_detection(detection: dict) -> tuple[float, float, float]:
+    inner = detection.get("inner") or {}
+    outer = detection.get("outer") or {}
+    inner_center = list(inner.get("center", []) or [])
+    outer_center = list(outer.get("center", []) or [])
+
+    if len(inner_center) == 3 and len(outer_center) == 3:
+        return (
+            _as_float(0.5 * (inner_center[0] + outer_center[0]), 0.0),
+            _as_float(0.5 * (inner_center[1] + outer_center[1]), 0.0),
+            _as_float(0.5 * (inner_center[2] + outer_center[2]), 0.0),
+        )
+    if len(inner_center) == 3:
+        return (_as_float(inner_center[0], 0.0), _as_float(inner_center[1], 0.0), _as_float(inner_center[2], 0.0))
+    if len(outer_center) == 3:
+        return (_as_float(outer_center[0], 0.0), _as_float(outer_center[1], 0.0), _as_float(outer_center[2], 0.0))
+    return (0.0, 0.0, 0.0)
+
+
+def _waveguide_plane_coordinates(
+    face_name: str,
+    source_offset_cells: int,
+    x_lines: list[float],
+    y_lines: list[float],
+    z_lines: list[float],
+) -> tuple[float, float] | None:
+    axis_values = {
+        "XMin": x_lines,
+        "XMax": x_lines,
+        "YMin": y_lines,
+        "YMax": y_lines,
+        "ZMin": z_lines,
+        "ZMax": z_lines,
+    }.get(str(face_name or ""))
+    if not axis_values or len(axis_values) < 2:
+        return None
+
+    source_offset = _as_int(source_offset_cells, 3)
+    if str(face_name).endswith("Min"):
+        source_index = min(max(2, source_offset), len(axis_values) - 1)
+        reference_index = source_index + 1
+    else:
+        source_index = max(0, (len(axis_values) - 1) - max(2, source_offset))
+        reference_index = source_index - 1
+
+    if reference_index < 0 or reference_index >= len(axis_values):
+        return None
+    return (float(axis_values[source_index]), float(axis_values[reference_index]))
+
+
+def _waveguide_start_stop_from_plane(
+    *,
+    face_name: str,
+    plane_coordinate: float,
+    simulation_box: dict,
+    model_scale: float,
+) -> tuple[list[float], list[float]] | None:
+    try:
+        xmin = _as_float(simulation_box.get("XMin"), 0.0) * model_scale
+        xmax = _as_float(simulation_box.get("XMax"), 0.0) * model_scale
+        ymin = _as_float(simulation_box.get("YMin"), 0.0) * model_scale
+        ymax = _as_float(simulation_box.get("YMax"), 0.0) * model_scale
+        zmin = _as_float(simulation_box.get("ZMin"), 0.0) * model_scale
+        zmax = _as_float(simulation_box.get("ZMax"), 0.0) * model_scale
+    except Exception:
+        return None
+
+    plane = float(plane_coordinate)
+    face = str(face_name or "")
+    if face in {"XMin", "XMax"}:
+        return ([plane, ymin, zmin], [plane, ymax, zmax])
+    if face in {"YMin", "YMax"}:
+        return ([xmin, plane, zmin], [xmax, plane, zmax])
+    if face in {"ZMin", "ZMax"}:
+        return ([xmin, ymin, plane], [xmax, ymax, plane])
+    return None
+
+
+def _coax_tem_field_lines(
+    port: dict,
+    *,
+    model_scale: float,
+    x_lines: list[float],
+    y_lines: list[float],
+    z_lines: list[float],
+    simulation_box: dict,
+) -> list[str]:
+    lines: list[str] = []
+
+    if str(port.get("PortType", "")).strip() != "Waveguide":
+        return lines
+
+    inference = port.get("WaveguideCoaxInference") or {}
+    detection = port.get("WaveguideFaceGeometry") or {}
+    contract = port.get("WaveguidePlaneContract") or {}
+
+    if str(inference.get("status", "")) != "supported":
+        lines.append(
+            f"# Waveguide port {port.get('name')}: TEM field export skipped (inference {inference.get('status', 'missing')})."
+        )
+        return lines
+
+    axis = str(inference.get("axis", "") or "").strip().lower()
+    if axis not in {"x", "y", "z"}:
+        lines.append(f"# Waveguide port {port.get('name')}: TEM field export skipped (invalid axis '{axis}').")
+        return lines
+
+    r_in = _as_float(inference.get("r_in"), 0.0) * model_scale
+    r_out = _as_float(inference.get("r_out"), 0.0) * model_scale
+    z0 = _as_float(inference.get("z0_ohm"), 0.0)
+    if r_in <= 0.0 or r_out <= r_in or z0 <= 0.0:
+        lines.append(f"# Waveguide port {port.get('name')}: TEM field export skipped (invalid coax parameters).")
+        return lines
+
+    center_raw = _coax_center_from_detection(detection)
+    center = (
+        round(center_raw[0] * model_scale, 12),
+        round(center_raw[1] * model_scale, 12),
+        round(center_raw[2] * model_scale, 12),
+    )
+
+    selected_face = str(contract.get("selected_face", "") or port.get("SimulationBoxFace", ""))
+    source_offset_cells = _as_int(contract.get("source_offset_cells", port.get("SourcePlaneOffsetCells", 3)), 3)
+    planes = _waveguide_plane_coordinates(selected_face, source_offset_cells, x_lines, y_lines, z_lines)
+    source_plane = planes[0] if planes is not None else None
+    reference_plane = planes[1] if planes is not None else None
+
+    raw_direction = str(port.get("PropagationDirection", "+z") or "+z")
+    prop = raw_direction.strip().lower()
+    sign = 1.0
+    if prop.startswith("-"):
+        sign = -1.0
+
+    number = _as_int(port.get("PortNumber", 1), 1)
+    fn_prefix = f"port_{number}_coax_tem"
+
+    lines.append(f"# Waveguide TEM fields for port {number} ({port.get('name')})")
+    lines.append(f"# Coax parameters: a={round(r_in, 12)}, b={round(r_out, 12)}, epsilon_r={_as_float(inference.get('dielectric_epsilon_r'), 1.0)}, Z0={z0}")
+    lines.append(f"# Coax center: ({center[0]}, {center[1]}, {center[2]})")
+    if source_plane is not None and reference_plane is not None:
+        lines.append(
+            f"# Three-plane contract: face={selected_face}, source_plane={source_plane}, reference_plane={reference_plane}"
+        )
+    else:
+        lines.append(f"# Three-plane contract: face={selected_face}, source/reference plane unavailable from mesh")
+    lines.append(f"{fn_prefix}_a = {round(r_in, 12)}")
+    lines.append(f"{fn_prefix}_b = {round(r_out, 12)}")
+    lines.append(f"{fn_prefix}_z0 = {z0}")
+    lines.append(f"{fn_prefix}_ln_ba = math.log({fn_prefix}_b / {fn_prefix}_a)")
+    lines.append(f"{fn_prefix}_cx = {center[0]}")
+    lines.append(f"{fn_prefix}_cy = {center[1]}")
+    lines.append(f"{fn_prefix}_cz = {center[2]}")
+    lines.append(f"{fn_prefix}_prop_sign = {sign}")
+    lines.append("")
+    lines.append(f"def {fn_prefix}_E(x, y, z):")
+    if axis == "z":
+        lines.append(f"    dx = x - {fn_prefix}_cx")
+        lines.append(f"    dy = y - {fn_prefix}_cy")
+        lines.append("    rho = math.sqrt(dx * dx + dy * dy)")
+    elif axis == "x":
+        lines.append(f"    dy = y - {fn_prefix}_cy")
+        lines.append(f"    dz = z - {fn_prefix}_cz")
+        lines.append("    rho = math.sqrt(dy * dy + dz * dz)")
+    else:
+        lines.append(f"    dx = x - {fn_prefix}_cx")
+        lines.append(f"    dz = z - {fn_prefix}_cz")
+        lines.append("    rho = math.sqrt(dx * dx + dz * dz)")
+    lines.append(f"    if rho <= {fn_prefix}_a or rho >= {fn_prefix}_b or rho == 0.0:")
+    lines.append("        return (0.0, 0.0, 0.0)")
+    lines.append(f"    e_mag = 1.0 / (rho * {fn_prefix}_ln_ba)")
+    if axis == "z":
+        lines.append("    return (e_mag * dx / rho, e_mag * dy / rho, 0.0)")
+    elif axis == "x":
+        lines.append("    return (0.0, e_mag * dy / rho, e_mag * dz / rho)")
+    else:
+        lines.append("    return (e_mag * dx / rho, 0.0, e_mag * dz / rho)")
+    lines.append("")
+    lines.append(f"def {fn_prefix}_H(x, y, z):")
+    if axis == "z":
+        lines.append(f"    dx = x - {fn_prefix}_cx")
+        lines.append(f"    dy = y - {fn_prefix}_cy")
+        lines.append("    rho = math.sqrt(dx * dx + dy * dy)")
+    elif axis == "x":
+        lines.append(f"    dy = y - {fn_prefix}_cy")
+        lines.append(f"    dz = z - {fn_prefix}_cz")
+        lines.append("    rho = math.sqrt(dy * dy + dz * dz)")
+    else:
+        lines.append(f"    dx = x - {fn_prefix}_cx")
+        lines.append(f"    dz = z - {fn_prefix}_cz")
+        lines.append("    rho = math.sqrt(dx * dx + dz * dz)")
+    lines.append(f"    if rho <= {fn_prefix}_a or rho >= {fn_prefix}_b or rho == 0.0:")
+    lines.append("        return (0.0, 0.0, 0.0)")
+    lines.append(f"    h_mag = 1.0 / (2.0 * math.pi * {fn_prefix}_z0 * rho)")
+    if axis == "z":
+        lines.append(f"    s = {fn_prefix}_prop_sign")
+        lines.append("    return (-s * h_mag * dy / rho, s * h_mag * dx / rho, 0.0)")
+    elif axis == "x":
+        lines.append(f"    s = {fn_prefix}_prop_sign")
+        lines.append("    return (0.0, -s * h_mag * dz / rho, s * h_mag * dy / rho)")
+    else:
+        lines.append(f"    s = {fn_prefix}_prop_sign")
+        lines.append("    return (s * h_mag * dz / rho, 0.0, -s * h_mag * dx / rho)")
+    lines.append("")
+    lines.append(f"port_{number}_waveguide_tem = {{")
+    lines.append(f"    'number': {number},")
+    lines.append(f"    'axis': '{axis}',")
+    lines.append(f"    'selected_face': {selected_face!r},")
+    if source_plane is not None and reference_plane is not None:
+        lines.append(f"    'source_plane': {source_plane},")
+        lines.append(f"    'reference_plane': {reference_plane},")
+    lines.append(f"    'E_func': {fn_prefix}_E,")
+    lines.append(f"    'H_func': {fn_prefix}_H,")
+    lines.append("}")
+
+    direction_axis, reverse = _normalize_direction(raw_direction)
+    source_start_stop = None
+    reference_start_stop = None
+    if source_plane is not None:
+        source_start_stop = _waveguide_start_stop_from_plane(
+            face_name=selected_face,
+            plane_coordinate=source_plane,
+            simulation_box=simulation_box,
+            model_scale=model_scale,
+        )
+    if reference_plane is not None:
+        reference_start_stop = _waveguide_start_stop_from_plane(
+            face_name=selected_face,
+            plane_coordinate=reference_plane,
+            simulation_box=simulation_box,
+            model_scale=model_scale,
+        )
+
+    excite = 1.0 if bool(port.get("Excite", False)) else 0.0
+    if source_start_stop is not None:
+        start, stop = source_start_stop
+        if reverse:
+            start, stop = stop, start
+        lines.append(
+            f"port_{number}_waveguide = _add_waveguide_port(FDTD, {number}, {start}, {stop}, '{direction_axis}', {excite}, {fn_prefix}_E, {fn_prefix}_H)"
+        )
+    else:
+        lines.append(
+            f"# Waveguide port {number}: skipped AddWaveGuidePort export because source-plane region could not be resolved."
+        )
+
+    if reference_start_stop is not None:
+        ref_start, ref_stop = reference_start_stop
+        if reverse:
+            ref_start, ref_stop = ref_stop, ref_start
+        lines.append(f"port_{number}_waveguide_reference_start = {ref_start}")
+        lines.append(f"port_{number}_waveguide_reference_stop = {ref_stop}")
+    else:
+        lines.append(
+            f"# Waveguide port {number}: probing/reference plane region unavailable in current mesh export context."
+        )
+    lines.append("# Phase 6.9: TEM spatial field functions are exported for waveguide/coax ports.")
+    return lines
+
+
 def generate_openems_script(
     model,
     script_path: str | Path,
@@ -127,6 +387,7 @@ def generate_openems_script(
     lines.append("_openems_root = os.environ.get('OPENEMS_INSTALL_DIR', '').strip()")
     lines.append("if _openems_root and hasattr(os, 'add_dll_directory'):")
     lines.append("    os.add_dll_directory(_openems_root)")
+    lines.append("import math")
     lines.append("import CSXCAD")
     lines.append("import openEMS")
     lines.append("from pathlib import Path")
@@ -242,6 +503,23 @@ def generate_openems_script(
             )
     lines.append("")
 
+    has_waveguide_port = any(str(port.get("PortType", "")).strip() == "Waveguide" for port in model.ports)
+    if has_waveguide_port:
+        lines.append("# Waveguide port adapter")
+        lines.append("def _add_waveguide_port(fdtd, number, start, stop, direction, excite, e_func, h_func):")
+        lines.append("    attempts = [")
+        lines.append("        lambda: fdtd.AddWaveGuidePort(number, start, stop, direction, excite, e_func, h_func),")
+        lines.append("        lambda: fdtd.AddWaveGuidePort(number, start, stop, direction, e_func, h_func, excite),")
+        lines.append("        lambda: fdtd.AddWaveGuidePort(num=number, start=start, stop=stop, p_dir=direction, excite=excite, E_func=e_func, H_func=h_func),")
+        lines.append("    ]")
+        lines.append("    for call in attempts:")
+        lines.append("        try:")
+        lines.append("            return call()")
+        lines.append("        except TypeError:")
+        lines.append("            continue")
+        lines.append("    raise RuntimeError('Unable to call AddWaveGuidePort with supported signatures for this openEMS Python build.')")
+        lines.append("")
+
     lines.append("# Ports")
     for port in model.ports:
         lines.append(
@@ -268,6 +546,16 @@ def generate_openems_script(
             lines.append(
                 f"port_{number} = FDTD.AddLumpedPort({number}, {resistance}, {start}, {stop}, '{direction}', {excite})"
             )
+        elif str(port.get("PortType", "")).strip() == "Waveguide":
+            for field_line in _coax_tem_field_lines(
+                port,
+                model_scale=model_scale,
+                x_lines=x_lines,
+                y_lines=y_lines,
+                z_lines=z_lines,
+                simulation_box=model.simulation_box or {},
+            ):
+                lines.append(field_line)
     lines.append("")
 
     lines.append("# Dump boxes")
