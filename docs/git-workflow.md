@@ -11,9 +11,11 @@ Goals:
 
 Run these from the project folder:
 
+```powershell
 git status
 git branch
 git remote -v
+```powershell
 
 Expected:
 - Current branch is main.
