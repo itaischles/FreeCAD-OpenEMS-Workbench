@@ -108,6 +108,7 @@ def test_script_generator_writes_expected_lines(tmp_path):
     assert "# BOX B" in text
     assert "# CYLINDER C" in text
     assert "# POLYHEDRON P" in text
+    assert "Dry-run export: model assembled; no FDTD.Run() was executed." in text
 
 
 def test_script_generator_uses_unassigned_fallback_for_missing_polyhedron_binding(tmp_path):

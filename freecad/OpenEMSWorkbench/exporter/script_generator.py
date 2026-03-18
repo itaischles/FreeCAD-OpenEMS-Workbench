@@ -808,6 +808,9 @@ def generate_openems_script(
         lines.append("FDTD.Run(str(sim_path), verbose=3)")
         lines.append("print(f'openEMS run completed: {sim_path}')")
     else:
+        lines.append("if __name__ == '__main__':")
+        lines.append("    print('Dry-run export: model assembled; no FDTD.Run() was executed.')")
+        lines.append("    print('Run simulation from FreeCAD with RunSimulation enabled to execute openEMS.')")
         lines.append("# Dry-run export script generated successfully")
 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
