@@ -216,10 +216,13 @@ This phase should:
 - Keep the selected boundary face fixed.
 - Place the waveguide source plane automatically a small number of mesh cells (default 3) inside the simulation box from that face.
 - Show that waveguide source plane in FreeCAD so the user can see exactly where the port is located.
+- Place the probing/reference plane exactly one mesh cell farther inward from the source plane in the direction of propagation.
 - Keep the simulation box and mesh extents unchanged.
 - Read the coax cross-section on that face from the model geometry and material assignments.
 - Infer the needed spatial field information from the selected face for the supported coax case.
-- Export the spatial electric and magnetic field distribution for that waveguide port.
+- Calculate the coax port impedance automatically when `r_in`, `r_out`, and dielectric `epsilon_r` are successfully inferred.
+- Calculate and export the spatial electric and magnetic field functions for that waveguide/coax port.
+- Export the resulting waveguide/coax port definition from FreeCAD workbench data to the openEMS Python script.
 - Remove the current placeholder behavior that says waveguide is unsupported.
 
 Reason:
@@ -230,8 +233,10 @@ Recommended MVP target:
 
 - Support automatic reading first for a restricted but useful coax case.
 - Start with axis-aligned coax geometry that crosses the selected simulation-box face cleanly.
-- Place the source plane a few mesh cells inside the selected face so the simulation box and mesh domain do not need to change.
+- Keep one explicit three-plane contract: selected boundary face, source plane a few mesh cells inward, and probing/reference plane one mesh cell farther inward along propagation direction.
 - Treat the number of inward mesh cells as a controlled waveguide setting that must be validated to avoid strong reflections back into the simulation domain.
+- Auto-fill the port impedance (`Z0`) when supported coax geometry/material inference succeeds.
+- Generate coaxial waveguide `E` and `H` spatial field functions automatically for the supported case.
 - If the geometry on the selected face does not match the supported pattern, stop in preflight with a clear message.
 
 Commit-sized tasks:
@@ -242,7 +247,10 @@ Commit-sized tasks:
 4. Commit 6.4: Infer `r_in`, `r_out`, coax axis, and dielectric epsilon from the detected geometry and assigned material objects.
 5. Commit 6.5: Extend the port panel so the user selects the face and sees a simple detected-geometry summary plus the inward mesh-cell offset setting.
 6. Commit 6.6: Replace the current waveguide placeholder error in preflight with real checks for supported coax geometry, valid boundary type, and safe source-plane distance from the selected face.
-7. Commit 6.7: Generate the waveguide spatial-field export with the source plane placed a few mesh cells inside the selected boundary face, then add tests for valid and invalid cases.
+7. Commit 6.7: Automatically calculate coax port impedance in the workbench when `r_in`, `r_out`, and `epsilon_r` are successfully inferred, and update the port impedance (`Z0`) field.
+8. Commit 6.8: Define and enforce the three-plane placement contract: selected simulation-box boundary face, source plane (orange preview plane) a few mesh cells inward, and probing/reference plane exactly one mesh cell farther inward along the propagation direction.
+9. Commit 6.9: Calculate and export the coaxial waveguide spatial field functions (`E` and `H`) for the supported axis-aligned coax case.
+10. Commit 6.10: Implement the full exporter path from FreeCAD workbench waveguide/coax port data to openEMS script generation, and add tests for valid and invalid cases.
 
 ### Phase 7: add excitation setup support
 
