@@ -5,7 +5,7 @@ BOUNDARY_TYPES = ["PML_8", "MUR", "PEC", "PMC"]
 PORT_TYPES = ["Lumped", "Waveguide", "PlaneWave"]
 SIMULATION_BOX_FACE_CHOICES = ["XMin", "XMax", "YMin", "YMax", "ZMin", "ZMax"]
 DUMP_TYPES = ["EField", "HField", "NF2FF"]
-EXCITATION_TYPES = ["Gaussian", "Sinusoid"]
+EXCITATION_TYPES = ["Gaussian", "Sinusoid", "Custom"]
 
 DEFAULTS = {
 	"simulation": {
@@ -14,8 +14,17 @@ DEFAULTS = {
 		"nr_ts": 100000,
 		"end_criteria": 1e-5,
 		"excitation_type": "Gaussian",
+		"excitation_f_max": 3e9,
+		"max_simulation_time": 100e-9,
 		"excitation_f0": 1e9,
 		"excitation_fc": 5e8,
+		"sinusoid_amplitude": 1.0,
+		"sinusoid_frequency": 1e9,
+		"sinusoid_phase_deg": 0.0,
+		"gaussian_amplitude": 1.0,
+		"gaussian_sigma": 1e-9,
+		"gaussian_delay": 4e-9,
+		"custom_expression": "",
 		"solver_executable": "",
 		"solver_arguments": "",
 		"run_blocking": True,

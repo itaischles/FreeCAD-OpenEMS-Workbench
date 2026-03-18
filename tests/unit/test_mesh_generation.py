@@ -305,3 +305,33 @@ def test_build_mesh_for_active_analysis_clips_snaps_to_simulation_box():
     assert all(0.0 <= value <= 10.0 for value in mesh.x)
     assert all(0.0 <= value <= 10.0 for value in mesh.y)
     assert all(0.0 <= value <= 10.0 for value in mesh.z)
+
+
+def test_build_mesh_for_active_analysis_merges_near_duplicate_snap_lines():
+    from OpenEMSWorkbench.meshing import build_mesh_for_active_analysis
+
+    grid = _MemberStub()
+    grid.MeshBaseStep = 1.0
+    grid.MeshMaxStep = 1.0
+    grid.MeshGrowthRate = 1.0
+    grid.MeshAutoSmooth = False
+    grid.CoordinateSystem = "Cartesian"
+
+    simulation_box = _SimulationBoxStub(
+        start_x=0.0,
+        start_y=0.0,
+        start_z=0.0,
+        length=10.0,
+        width=10.0,
+        height=10.0,
+    )
+    # Near-coincident x faces differing by 4e-7 model units should be merged.
+    geometry_a = _GeometryStub("GeoA", 2.0000000, 1.0, 1.0, 4.0, 2.0, 2.0)
+    geometry_b = _GeometryStub("GeoB", 2.0000004, 3.0, 3.0, 5.0, 4.0, 4.0)
+
+    analysis = _AnalysisStub(members=[grid, simulation_box, geometry_a, geometry_b])
+    doc = _DocStub([analysis])
+
+    _, _, mesh = build_mesh_for_active_analysis(doc)
+    close_values = [value for value in mesh.x if abs(value - 2.0) < 1e-5]
+    assert len(close_values) == 1

@@ -86,6 +86,10 @@ def test_script_generator_writes_expected_lines(tmp_path):
     text = path.read_text(encoding="utf-8")
 
     assert "import CSXCAD" in text
+    assert "import sys" in text
+    assert "OPENEMS_INSTALL_PATH" in text
+    assert "OPENEMS_PYTHONPATH" in text
+    assert "sys.path.insert(0, _text)" in text
     assert "grid.AddLine('x'" in text
     assert "grid.AddLine('y'" in text
     assert "grid.AddLine('z'" in text
@@ -416,3 +420,105 @@ def test_script_generator_skips_waveguide_port_export_when_inference_is_unsuppor
 
     assert "TEM field export skipped" in text
     assert "port_1_waveguide = _add_waveguide_port(" not in text
+
+
+def test_script_generator_emits_sinusoid_excitation_backend(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={
+            "ExcitationType": "Sinusoid",
+            "ExcitationFMax": 3e9,
+            "SinusoidFrequency": 2.5e9,
+            "SinusoidAmplitude": 1.2,
+            "SinusoidPhaseDeg": 30.0,
+        },
+        grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_sinusoid.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "# Excitation backend: Sinusoid (f_max=3000000000.0)" in text
+    assert "FDTD.SetSinusExcite(2500000000.0)" in text
+    assert "Sinusoid parameters: amplitude=1.2, phase_deg=30.0" in text
+
+
+def test_script_generator_accepts_legacy_sinusoidal_alias(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={
+            "ExcitationType": "Sinusoidal",
+            "ExcitationFMax": 3e9,
+            "SinusoidFrequency": 2.5e9,
+        },
+        grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_sinusoidal_alias.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "# Excitation backend: Sinusoid" in text
+    assert "FDTD.SetSinusExcite(2500000000.0)" in text
+
+
+def test_script_generator_emits_custom_excitation_backend(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={
+            "ExcitationType": "Custom",
+            "ExcitationFMax": 4e9,
+            "CustomExcitationExpression": "sin(2*pi*1e9*t)",
+        },
+        grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_custom.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "# Excitation backend: Custom (f_max=4000000000.0)" in text
+    assert "custom_excitation_expression = 'sin(2*pi*1e9*t)'" in text
+    assert "_set_custom_excite = getattr(FDTD, 'SetCustomExcite', None)" in text
+    assert "Unable to call SetCustomExcite with supported signatures" in text
+
+
+def test_script_generator_exports_run_limit_contract_with_max_time(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={
+            "NumberOfTimeSteps": 2000,
+            "ComputedNumberOfTimeSteps": 100,
+            "ComputedTimeStep": 1e-9,
+            "MaxSimulationTime": 50e-9,
+            "EndCriteria": 1e-6,
+            "ExcitationType": "Gaussian",
+            "ExcitationF0": 1e9,
+            "ExcitationFc": 5e8,
+        },
+        grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_run_limits.py")
+    text = path.read_text(encoding="utf-8")
+
+    # NrTS must come from ceil(T_max / dt) = ceil(50e-9 / 1e-9) = 50.
+    assert "FDTD = openEMS.openEMS(NrTS=50, EndCriteria=1e-06)" in text
+    assert "# Run limit contract: NrTS=50, MaxTime=5e-08 sec" in text
+    assert "max_time_sec = 5e-08" in text
+    assert "_set_max_time = getattr(FDTD, 'SetMaxTime', None)" in text
+    assert "Unable to call SetMaxTime with supported signatures" in text

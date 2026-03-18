@@ -28,6 +28,8 @@ def test_coordinate_and_port_enums_are_defined():
     assert "Lumped" in model.PORT_TYPES
     assert "Waveguide" in model.PORT_TYPES
     assert "Gaussian" in model.EXCITATION_TYPES
+    assert "Sinusoid" in model.EXCITATION_TYPES
+    assert "Custom" in model.EXCITATION_TYPES
 
 
 def test_excitation_and_port_region_defaults_exist():
@@ -37,8 +39,13 @@ def test_excitation_and_port_region_defaults_exist():
     port_defaults = model.DEFAULTS["port"]
 
     assert sim_defaults["excitation_type"] == "Gaussian"
+    assert sim_defaults["excitation_f_max"] > 0.0
+    assert sim_defaults["max_simulation_time"] > 0.0
     assert sim_defaults["excitation_f0"] > 0.0
     assert sim_defaults["excitation_fc"] > 0.0
+    assert sim_defaults["sinusoid_frequency"] > 0.0
+    assert sim_defaults["gaussian_sigma"] > 0.0
+    assert sim_defaults["gaussian_delay"] >= 0.0
     assert port_defaults["propagation_direction"] == "+z"
     assert "start_x" in port_defaults
     assert "stop_z" in port_defaults

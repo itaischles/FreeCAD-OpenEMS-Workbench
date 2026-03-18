@@ -213,7 +213,13 @@ def _collect_analysis_geometry_bounds(analysis: Any) -> list[dict[str, float]]:
 	return bounds
 
 
-def _merge_axis_snaps(axis: tuple[float, ...], snaps: list[float], minimum: float, maximum: float) -> tuple[float, ...]:
+def _merge_axis_snaps(
+	axis: tuple[float, ...],
+	snaps: list[float],
+	minimum: float,
+	maximum: float,
+	merge_tolerance: float = 0.0,
+) -> tuple[float, ...]:
 	values = [v for v in axis if minimum <= v <= maximum]
 	for value in snaps:
 		if minimum <= value <= maximum:
@@ -221,17 +227,34 @@ def _merge_axis_snaps(axis: tuple[float, ...], snaps: list[float], minimum: floa
 	merged = sorted({round(v, 9) for v in values})
 	if not merged:
 		return (round(minimum, 9), round(maximum, 9))
-	if merged[0] != round(minimum, 9):
-		merged.insert(0, round(minimum, 9))
-	if merged[-1] != round(maximum, 9):
-		merged.append(round(maximum, 9))
-	return tuple(merged)
+
+	tolerance = max(_to_float(merge_tolerance, 0.0), 0.0)
+	collapsed: list[float] = [merged[0]]
+	for value in merged[1:]:
+		if tolerance > 0.0 and abs(value - collapsed[-1]) <= tolerance:
+			continue
+		collapsed.append(value)
+
+	min_r = round(minimum, 9)
+	max_r = round(maximum, 9)
+	if not collapsed:
+		collapsed = [min_r, max_r]
+	if abs(collapsed[0] - min_r) <= tolerance:
+		collapsed[0] = min_r
+	elif collapsed[0] != min_r:
+		collapsed.insert(0, min_r)
+	if abs(collapsed[-1] - max_r) <= tolerance:
+		collapsed[-1] = max_r
+	elif collapsed[-1] != max_r:
+		collapsed.append(max_r)
+	return tuple(collapsed)
 
 
 def _apply_conservative_snapping(
 	mesh: MeshLines,
 	simulation_box_extents: tuple[float, float, float, float, float, float],
 	geometry_bounds: list[dict[str, float]],
+	merge_tolerance: float = 0.0,
 ) -> MeshLines:
 	if not geometry_bounds:
 		return mesh
@@ -248,9 +271,9 @@ def _apply_conservative_snapping(
 			z_snaps.extend([entry["zmin"], entry["zmax"]])
 		return MeshLines(
 			coordinate_system=mesh.coordinate_system,
-			x=_merge_axis_snaps(mesh.x, x_snaps, xmin, xmax),
-			y=_merge_axis_snaps(mesh.y, y_snaps, ymin, ymax),
-			z=_merge_axis_snaps(mesh.z, z_snaps, zmin, zmax),
+			x=_merge_axis_snaps(mesh.x, x_snaps, xmin, xmax, merge_tolerance=merge_tolerance),
+			y=_merge_axis_snaps(mesh.y, y_snaps, ymin, ymax, merge_tolerance=merge_tolerance),
+			z=_merge_axis_snaps(mesh.z, z_snaps, zmin, zmax, merge_tolerance=merge_tolerance),
 			radial=mesh.radial,
 			azimuth=mesh.azimuth,
 			preview_line_cap=mesh.preview_line_cap,
@@ -275,8 +298,8 @@ def _apply_conservative_snapping(
 			coordinate_system=mesh.coordinate_system,
 			x=mesh.x,
 			y=mesh.y,
-			z=_merge_axis_snaps(mesh.z, z_snaps, zmin, zmax),
-			radial=_merge_axis_snaps(mesh.radial, radial_snaps, 0.0, radial_limit),
+			z=_merge_axis_snaps(mesh.z, z_snaps, zmin, zmax, merge_tolerance=merge_tolerance),
+			radial=_merge_axis_snaps(mesh.radial, radial_snaps, 0.0, radial_limit, merge_tolerance=merge_tolerance),
 			azimuth=mesh.azimuth,
 			preview_line_cap=mesh.preview_line_cap,
 		)
@@ -421,7 +444,14 @@ def build_mesh_for_analysis(analysis: Any) -> tuple[Any, Any, MeshLines]:
 	simulation_box_extents = _resolve_simulation_box_extents(analysis)
 	mesh = generate_mesh_from_grid(grid, simulation_box_extents=simulation_box_extents)
 	geometry_bounds = _collect_analysis_geometry_bounds(analysis)
-	mesh = _apply_conservative_snapping(mesh, simulation_box_extents, geometry_bounds)
+	_, base_resolution, _, _, _, _ = _extract_grid_parameters(grid)
+	merge_tolerance = max(1e-9, base_resolution * 1e-6)
+	mesh = _apply_conservative_snapping(
+		mesh,
+		simulation_box_extents,
+		geometry_bounds,
+		merge_tolerance=merge_tolerance,
+	)
 	return analysis, grid, mesh
 
 

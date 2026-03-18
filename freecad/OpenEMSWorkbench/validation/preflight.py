@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import os
 from typing import Any
 
@@ -43,6 +44,17 @@ def _finding(severity: str, check_id: str, message: str, obj: Any = None) -> Pre
         message=message,
         object_name=getattr(obj, "Name", "") if obj is not None else "",
     )
+
+
+def _normalized_excitation_type(value: str) -> str:
+    text = str(value or "Gaussian").strip().lower()
+    if text in {"gaussian", "gauss", "gaussianpulse", "gaussian_pulse"}:
+        return "Gaussian"
+    if text in {"sinusoid", "sinusoidal", "sine"}:
+        return "Sinusoid"
+    if text in {"custom", "custom-expression", "custom_expression"}:
+        return "Custom"
+    return str(value or "").strip() or "Gaussian"
 
 
 def _check_required_counts(members) -> list[PreflightFinding]:
@@ -273,16 +285,101 @@ def _check_excitation(members) -> list[PreflightFinding]:
         return findings
 
     sim = members.simulations[0]
-    excitation_type = str(getattr(sim, "ExcitationType", "Gaussian")).strip()
-    if excitation_type != "Gaussian":
+    excitation_type = _normalized_excitation_type(getattr(sim, "ExcitationType", "Gaussian"))
+    supported_types = {"Gaussian", "Sinusoid", "Custom"}
+    if excitation_type not in supported_types:
         findings.append(
             _finding(
                 "error",
                 "simulation.excitation_type_supported",
-                f"Excitation type '{excitation_type}' is not supported in Phase 9 MVP. Use Gaussian.",
+                (
+                    f"Excitation type '{excitation_type}' is not supported. "
+                    "Use one of: Gaussian, Sinusoid, Custom."
+                ),
                 sim,
             )
         )
+
+    try:
+        f_max = float(getattr(sim, "ExcitationFMax", 0.0))
+    except Exception:
+        f_max = 0.0
+    if not math.isfinite(f_max) or f_max <= 0.0:
+        findings.append(
+            _finding(
+                "error",
+                "simulation.excitation_fmax_positive",
+                "ExcitationFMax (f_max) must be finite and greater than 0 Hz.",
+                sim,
+            )
+        )
+
+    try:
+        t_max = float(getattr(sim, "MaxSimulationTime", 0.0))
+    except Exception:
+        t_max = 0.0
+    if not math.isfinite(t_max) or t_max <= 0.0:
+        findings.append(
+            _finding(
+                "error",
+                "simulation.max_time_positive",
+                "MaxSimulationTime (T_max) must be finite and greater than 0 sec.",
+                sim,
+            )
+        )
+
+    try:
+        dt = float(getattr(sim, "ComputedTimeStep", 0.0))
+    except Exception:
+        dt = 0.0
+    if not math.isfinite(dt) or dt <= 0.0:
+        findings.append(
+            _finding(
+                "error",
+                "simulation.computed_dt_finite_positive",
+                "Computed timestep dt must be finite and greater than 0 sec.",
+                sim,
+            )
+        )
+
+    nr_ts_candidates = [
+        getattr(sim, "ComputedNumberOfTimeSteps", None),
+        getattr(sim, "NumberOfTimeSteps", None),
+    ]
+    nr_ts = None
+    for candidate in nr_ts_candidates:
+        if candidate is None:
+            continue
+        try:
+            nr_ts = int(candidate)
+            break
+        except Exception:
+            continue
+    if nr_ts is None or nr_ts <= 0:
+        findings.append(
+            _finding(
+                "error",
+                "simulation.computed_nrts_positive",
+                "Computed timestep budget NrTS must be an integer greater than 0.",
+                sim,
+            )
+        )
+
+    # Cross-check the computed budget against T_max and dt when all are valid.
+    if math.isfinite(t_max) and t_max > 0.0 and math.isfinite(dt) and dt > 0.0 and nr_ts is not None and nr_ts > 0:
+        expected_nrts = int(math.ceil(t_max / dt))
+        if nr_ts != expected_nrts:
+            findings.append(
+                _finding(
+                    "error",
+                    "simulation.computed_budget_consistency",
+                    (
+                        f"Computed NrTS ({nr_ts}) does not match ceil(T_max/dt) ({expected_nrts}). "
+                        "Recompute the simulation timestep budget."
+                    ),
+                    sim,
+                )
+            )
 
     try:
         f0 = float(getattr(sim, "ExcitationF0", 0.0))
@@ -293,24 +390,120 @@ def _check_excitation(members) -> list[PreflightFinding]:
     except Exception:
         fc = 0.0
 
-    if f0 <= 0.0:
-        findings.append(
-            _finding(
-                "error",
-                "simulation.excitation_f0_positive",
-                "ExcitationF0 must be greater than 0 Hz.",
-                sim,
+    if excitation_type == "Gaussian":
+        if f0 <= 0.0 or not math.isfinite(f0):
+            findings.append(
+                _finding(
+                    "error",
+                    "simulation.excitation_f0_positive",
+                    "ExcitationF0 must be finite and greater than 0 Hz for Gaussian excitation.",
+                    sim,
+                )
             )
-        )
-    if fc <= 0.0:
-        findings.append(
-            _finding(
-                "error",
-                "simulation.excitation_fc_positive",
-                "ExcitationFc must be greater than 0 Hz.",
-                sim,
+        if fc <= 0.0 or not math.isfinite(fc):
+            findings.append(
+                _finding(
+                    "error",
+                    "simulation.excitation_fc_positive",
+                    "ExcitationFc must be finite and greater than 0 Hz for Gaussian excitation.",
+                    sim,
+                )
             )
-        )
+
+        try:
+            gaussian_amplitude = float(getattr(sim, "GaussianAmplitude", 0.0))
+        except Exception:
+            gaussian_amplitude = 0.0
+        try:
+            gaussian_sigma = float(getattr(sim, "GaussianSigma", 0.0))
+        except Exception:
+            gaussian_sigma = 0.0
+        try:
+            gaussian_delay = float(getattr(sim, "GaussianDelay", 0.0))
+        except Exception:
+            gaussian_delay = 0.0
+
+        if not math.isfinite(gaussian_amplitude) or gaussian_amplitude <= 0.0:
+            findings.append(
+                _finding(
+                    "error",
+                    "simulation.gaussian_amplitude_positive",
+                    "GaussianAmplitude must be finite and greater than 0.",
+                    sim,
+                )
+            )
+        if not math.isfinite(gaussian_sigma) or gaussian_sigma <= 0.0:
+            findings.append(
+                _finding(
+                    "error",
+                    "simulation.gaussian_sigma_positive",
+                    "GaussianSigma must be finite and greater than 0 sec.",
+                    sim,
+                )
+            )
+        if not math.isfinite(gaussian_delay) or gaussian_delay < 0.0:
+            findings.append(
+                _finding(
+                    "error",
+                    "simulation.gaussian_delay_non_negative",
+                    "GaussianDelay must be finite and >= 0 sec.",
+                    sim,
+                )
+            )
+
+    if excitation_type == "Sinusoid":
+        try:
+            sinusoid_amplitude = float(getattr(sim, "SinusoidAmplitude", 0.0))
+        except Exception:
+            sinusoid_amplitude = 0.0
+        try:
+            sinusoid_frequency = float(getattr(sim, "SinusoidFrequency", 0.0))
+        except Exception:
+            sinusoid_frequency = 0.0
+        try:
+            sinusoid_phase = float(getattr(sim, "SinusoidPhaseDeg", 0.0))
+        except Exception:
+            sinusoid_phase = 0.0
+
+        if not math.isfinite(sinusoid_amplitude) or sinusoid_amplitude <= 0.0:
+            findings.append(
+                _finding(
+                    "error",
+                    "simulation.sinusoid_amplitude_positive",
+                    "SinusoidAmplitude must be finite and greater than 0.",
+                    sim,
+                )
+            )
+        if not math.isfinite(sinusoid_frequency) or sinusoid_frequency <= 0.0:
+            findings.append(
+                _finding(
+                    "error",
+                    "simulation.sinusoid_frequency_positive",
+                    "SinusoidFrequency must be finite and greater than 0 Hz.",
+                    sim,
+                )
+            )
+        if not math.isfinite(sinusoid_phase):
+            findings.append(
+                _finding(
+                    "error",
+                    "simulation.sinusoid_phase_finite",
+                    "SinusoidPhaseDeg must be finite.",
+                    sim,
+                )
+            )
+
+    if excitation_type == "Custom":
+        expression = str(getattr(sim, "CustomExcitationExpression", "") or "").strip()
+        if not expression:
+            findings.append(
+                _finding(
+                    "error",
+                    "simulation.custom_expression_required",
+                    "CustomExcitationExpression is required for Custom excitation.",
+                    sim,
+                )
+            )
 
     return findings
 

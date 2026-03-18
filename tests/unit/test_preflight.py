@@ -67,8 +67,20 @@ def _minimal_valid_analysis():
         CoordinateSystem="Cartesian",
         OutputDirectory="",
         ExcitationType="Gaussian",
+        ExcitationFMax=3.0e9,
+        MaxSimulationTime=100e-9,
+        ComputedTimeStep=1.0e-12,
+        ComputedNumberOfTimeSteps=100000,
+        NumberOfTimeSteps=100000,
         ExcitationF0=1.0e9,
         ExcitationFc=5.0e8,
+        GaussianAmplitude=1.0,
+        GaussianSigma=1e-9,
+        GaussianDelay=4e-9,
+        SinusoidAmplitude=1.0,
+        SinusoidFrequency=1e9,
+        SinusoidPhaseDeg=0.0,
+        CustomExcitationExpression="sin(2*pi*1e9*t)",
     )
     grid = Obj("Grid", "OpenEMS_Grid", CoordinateSystem="Cartesian")
     mat = Obj("Material", "OpenEMS_Material")
@@ -333,6 +345,105 @@ def test_preflight_blocks_invalid_excitation_values():
     simulation.ExcitationF0 = 0.0
     findings = run_preflight(analysis)
     assert any(f.check_id == "simulation.excitation_f0_positive" for f in findings)
+
+
+def test_preflight_requires_positive_fmax_and_tmax():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    simulation = analysis.Group[0]
+    simulation.ExcitationFMax = 0.0
+    simulation.MaxSimulationTime = 0.0
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "simulation.excitation_fmax_positive" for f in findings)
+    assert any(f.check_id == "simulation.max_time_positive" for f in findings)
+
+
+def test_preflight_requires_finite_computed_timestep_budget_values():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    simulation = analysis.Group[0]
+    simulation.ComputedTimeStep = 0.0
+    simulation.ComputedNumberOfTimeSteps = 0
+    simulation.NumberOfTimeSteps = 0
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "simulation.computed_dt_finite_positive" for f in findings)
+    assert any(f.check_id == "simulation.computed_nrts_positive" for f in findings)
+
+
+def test_preflight_requires_sinusoid_parameters_when_sinusoid_selected():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    simulation = analysis.Group[0]
+    simulation.ExcitationType = "Sinusoid"
+    simulation.SinusoidFrequency = 0.0
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "simulation.sinusoid_frequency_positive" for f in findings)
+
+
+def test_preflight_requires_custom_expression_when_custom_selected():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    simulation = analysis.Group[0]
+    simulation.ExcitationType = "Custom"
+    simulation.CustomExcitationExpression = ""
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "simulation.custom_expression_required" for f in findings)
+
+
+def test_preflight_accepts_valid_sinusoid_excitation():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    simulation = analysis.Group[0]
+    simulation.ExcitationType = "Sinusoid"
+    simulation.ExcitationFMax = 3e9
+    simulation.MaxSimulationTime = 1e-7
+    simulation.ComputedTimeStep = 1e-9
+    simulation.ComputedNumberOfTimeSteps = 100
+    simulation.NumberOfTimeSteps = 100
+    simulation.SinusoidAmplitude = 1.0
+    simulation.SinusoidFrequency = 2e9
+    simulation.SinusoidPhaseDeg = 15.0
+
+    findings = run_preflight(analysis)
+    assert not any(f.severity == "error" and f.check_id.startswith("simulation.sinusoid_") for f in findings)
+
+
+def test_preflight_accepts_valid_custom_excitation():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    simulation = analysis.Group[0]
+    simulation.ExcitationType = "Custom"
+    simulation.ExcitationFMax = 3e9
+    simulation.MaxSimulationTime = 1e-7
+    simulation.ComputedTimeStep = 1e-9
+    simulation.ComputedNumberOfTimeSteps = 100
+    simulation.NumberOfTimeSteps = 100
+    simulation.CustomExcitationExpression = "sin(2*pi*1e9*t)"
+
+    findings = run_preflight(analysis)
+    assert not any(f.check_id == "simulation.custom_expression_required" for f in findings)
+
+
+def test_preflight_accepts_legacy_excitation_aliases():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    simulation = analysis.Group[0]
+    simulation.ExcitationType = "Sinusoidal"
+    simulation.SinusoidFrequency = 2e9
+
+    findings = run_preflight(analysis)
+    assert not any(f.check_id == "simulation.excitation_type_supported" for f in findings)
 
 
 def test_preflight_requires_single_excited_port():

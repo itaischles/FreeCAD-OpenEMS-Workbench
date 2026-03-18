@@ -313,7 +313,7 @@ Recommended MVP target:
 
 Commit-sized tasks:
 
-1. Commit 8.1: Extend the simulation model and task panel with excitation-type dropdown, per-type parameter groups, mandatory `f_max`, and user-defined physical `T_max`.
+1. Commit 8.1: Extend the simulation model and task panel with excitation-type dropdown, per-type parameter groups, mandatory `f_max` (Hz), and user-defined physical `T_max` (sec).
 2. Commit 8.2: Add deterministic timestep-budget computation (`dt`, `NrTS`) from mesh and `T_max`, and expose computed values in the simulation object/panel.
 3. Commit 8.3: Add preflight checks for per-type parameter validity, mandatory `f_max`, valid `T_max`, and finite computed `dt`/`NrTS`.
 4. Commit 8.4: Refactor exporter excitation architecture to use one internal waveform abstraction with pluggable backends (native Sinusoid/Gaussian now, custom-expression backend enabled).
