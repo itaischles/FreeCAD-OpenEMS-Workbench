@@ -206,7 +206,70 @@ Automated verification checks for this phase:
 - Run `pytest tests/unit/test_analysis_feature.py tests/unit/test_phase2_commands.py tests/unit/test_preflight.py` after changes that touch Grid/simulation ownership wiring, commands, or validation.
 - Add/adjust tests to assert boundedness, deterministic snapping behavior, preview/export consistency, and absence of legacy mesh paths.
 
-### Phase 6: make dump boxes generate real field output
+### Phase 6: set a waveguide port on a simulation-box boundary face
+
+Waveguide support is one of the most important missing parts for the intended coaxial-cable workflow.
+
+This phase should:
+
+- Let the user choose which simulation-box face the waveguide port attaches to.
+- Keep the selected boundary face fixed.
+- Place the waveguide source plane automatically a small number of mesh cells (default 3) inside the simulation box from that face.
+- Show that waveguide source plane in FreeCAD so the user can see exactly where the port is located.
+- Keep the simulation box and mesh extents unchanged.
+- Read the coax cross-section on that face from the model geometry and material assignments.
+- Infer the needed spatial field information from the selected face for the supported coax case.
+- Export the spatial electric and magnetic field distribution for that waveguide port.
+- Remove the current placeholder behavior that says waveguide is unsupported.
+
+Reason:
+
+Waveguide setup is different from excitation setup. This phase is about where the source is attached and what field shape it has in space. It is not yet about the time waveform or source magnitude.
+
+Recommended MVP target:
+
+- Support automatic reading first for a restricted but useful coax case.
+- Start with axis-aligned coax geometry that crosses the selected simulation-box face cleanly.
+- Place the source plane a few mesh cells inside the selected face so the simulation box and mesh domain do not need to change.
+- Treat the number of inward mesh cells as a controlled waveguide setting that must be validated to avoid strong reflections back into the simulation domain.
+- If the geometry on the selected face does not match the supported pattern, stop in preflight with a clear message.
+
+Commit-sized tasks:
+
+1. Commit 6.1: Extend the port object so it stores the selected simulation-box face and the source-plane offset in mesh cells.
+2. Commit 6.2: Show a visible waveguide-port plane in FreeCAD at the computed source-plane location so the user can confirm the port position visually.
+3. Commit 6.3: Add geometry-reading logic that inspects the selected face and tries to detect a supported coax cross-section.
+4. Commit 6.4: Infer `r_in`, `r_out`, coax axis, and dielectric epsilon from the detected geometry and assigned material objects.
+5. Commit 6.5: Extend the port panel so the user selects the face and sees a simple detected-geometry summary plus the inward mesh-cell offset setting.
+6. Commit 6.6: Replace the current waveguide placeholder error in preflight with real checks for supported coax geometry, valid boundary type, and safe source-plane distance from the selected face.
+7. Commit 6.7: Generate the waveguide spatial-field export with the source plane placed a few mesh cells inside the selected boundary face, then add tests for valid and invalid cases.
+
+### Phase 7: add excitation setup support
+
+The coax target also needs real excitation setup, but this should stay separate from the waveguide spatial setup.
+
+This phase should:
+
+- Add sinusoidal excitation as a real supported simulation option.
+- Keep Gaussian excitation working.
+- Validate excitation parameters properly.
+- Support clear setup of excitation time profile and source magnitude.
+- Export the correct openEMS excitation call.
+- Remove temporary unsupported-excitation placeholder branches once excitation export is fully integrated.
+
+Reason:
+
+This phase is about how the source behaves in time. It should stay separate from the Phase 6 work that defines where the source is attached and what spatial field pattern it uses.
+
+Commit-sized tasks:
+
+1. Commit 7.1: Extend the simulation model and panel so excitation type, main frequency settings, and source magnitude are clearly defined.
+2. Commit 7.2: Add preflight checks for valid Gaussian and sinusoidal excitation settings.
+3. Commit 7.3: Map excitation modes to the correct openEMS script calls while preserving the Phase 6 waveguide spatial setup.
+4. Commit 7.4: Add tests for Gaussian and sinusoidal export paths.
+5. Commit 7.5: Remove legacy placeholder excitation branches and keep one clean excitation path set.
+
+### Phase 8: make dump boxes generate real field output
 
 DumpBox objects already exist, but they are still mostly placeholders in the exported script.
 
@@ -219,105 +282,29 @@ This phase should:
 
 Reason:
 
-This is the shortest path toward later visualization inside FreeCAD.
+Field dump output is important for the MVP, but it should come after the core waveguide and excitation setup is in place.
 
 Commit-sized tasks:
 
-1. Commit 6.1: Extend dumpbox export model with explicit dump type and frequency handling.
-2. Commit 6.2: Generate real openEMS field-dump commands for at least electric-field outputs.
-3. Commit 6.3: Ensure dump output paths are created under the user-defined results folder.
-4. Commit 6.4: Add tests that verify dump commands and output path generation.
-5. Commit 6.5: Remove legacy placeholder dumpbox script stubs and temporary compatibility branches.
+1. Commit 8.1: Extend dumpbox export model with explicit dump type and frequency handling.
+2. Commit 8.2: Generate real openEMS field-dump commands for at least electric-field outputs.
+3. Commit 8.3: Ensure dump output paths are created under the user-defined results folder.
+4. Commit 8.4: Add tests that verify dump commands and output path generation.
+5. Commit 8.5: Remove legacy placeholder dumpbox script stubs and temporary compatibility branches.
 
-### Phase 7: stabilize one simple end-to-end runnable case
+### Phase 9: build the coaxial-cable reference workflow
 
-Before adding the more advanced coax-specific features, build one simpler case that is known to work from start to finish.
-
-This phase should:
-
-- Use the currently supported simple excitation path.
-- Run preflight automatically before every simulation run.
-- Pass preflight cleanly.
-- Export a real script.
-- Run successfully.
-- Produce output files and logs.
-
-Reason:
-
-This creates a reliable base and reduces debugging when more advanced features are added.
-
-Commit-sized tasks:
-
-1. Commit 7.1: Enforce automatic preflight invocation before simulation run command executes.
-2. Commit 7.2: Improve run-time reporting so preflight failures are shown clearly and block solver launch.
-3. Commit 7.3: Add one stable minimal example that passes preflight, exports, and runs end to end.
-4. Commit 7.4: Add execution tests covering auto-preflight and run gating behavior.
-
-### Phase 8: add waveguide port support
-
-Waveguide ports are one of the most important missing features for the intended coaxial-cable workflow.
-
-This phase should:
-
-- Extend the port object with the needed waveguide settings.
-- Expose those settings in the task panel.
-- Validate them in preflight.
-- Export real waveguide port commands in the script.
-- Remove placeholder/legacy waveguide-port export stubs once the real waveguide path is stable.
-
-Recommended first version:
-
-- Start with manual parameter entry.
-- Later add face or object picking if needed.
-
-Reason:
-
-This keeps the implementation smaller while still reaching the intended physics workflow.
-
-Commit-sized tasks:
-
-1. Commit 8.1: Add waveguide port properties to the port object model and defaults.
-2. Commit 8.2: Extend port task panel UI with waveguide settings and validation hints.
-3. Commit 8.3: Extend preflight to validate waveguide-specific requirements.
-4. Commit 8.4: Generate waveguide port commands in script export and add tests.
-5. Commit 8.5: Remove legacy placeholder waveguide-port branches while preserving working non-waveguide port behavior.
-
-### Phase 9: add sinusoidal excitation support
-
-The coax target also needs sinusoidal excitation, which is currently not fully supported.
-
-This phase should:
-
-- Add sinusoidal excitation as a real supported simulation option.
-- Keep Gaussian excitation working.
-- Validate excitation parameters properly.
-- Export the correct openEMS excitation call.
-- Remove temporary unsupported-excitation placeholder branches once sinusoidal export is fully integrated.
-
-Reason:
-
-This is required for the target cable example and should be added only after the base export-and-run path is trustworthy.
-
-Commit-sized tasks:
-
-1. Commit 9.1: Extend simulation model and panel to support sinusoidal parameters.
-2. Commit 9.2: Add preflight checks for sinusoidal parameter validity.
-3. Commit 9.3: Map sinusoidal mode to the correct openEMS script calls while preserving Gaussian behavior.
-4. Commit 9.4: Add tests for both Gaussian and sinusoidal export paths.
-5. Commit 9.5: Remove legacy placeholder excitation branches and keep one clean production excitation path set (Gaussian + Sinusoidal).
-
-### Phase 10: build the coaxial-cable reference workflow
-
-Once the previous phases are done, use a coaxial-cable example as the main acceptance test for the MVP.
+Once the previous phases are done, use a coaxial-cable example as the main acceptance test for the scientific workflow.
 
 This phase should include:
 
 - FreeCAD coax geometry.
 - Material assignment for conductors and dielectric.
 - Absorbing boundary conditions.
-- Waveguide excitation at one end.
-- Simulation run.
-- Saved field output in the results folder.
+- Waveguide setup on one selected boundary face.
+- Excitation setup.
+- Field dump output.
+- Documented expected export artifacts and output files.
 
 Reason:
 
@@ -325,10 +312,34 @@ This is the real scientific use case that the MVP should demonstrate.
 
 Commit-sized tasks:
 
-1. Commit 10.1: Add a documented coax geometry setup example in the examples folder.
-2. Commit 10.2: Add documented material assignment and boundary setup for the coax case.
-3. Commit 10.3: Add documented run steps and expected output files for acceptance.
-4. Commit 10.4: Add a final verification checklist specifically for the coax reference workflow.
+1. Commit 9.1: Add a documented coax geometry setup example in the examples folder.
+2. Commit 9.2: Add documented material assignment, boundary setup, waveguide setup, and excitation setup for the coax case.
+3. Commit 9.3: Add documented expected export artifacts and output files for acceptance.
+4. Commit 9.4: Add a final verification checklist specifically for the coax reference workflow.
+
+### Phase 10: stabilize one full end-to-end runnable MVP case
+
+After the missing building blocks are in place, finish by proving that one complete workflow runs from start to finish.
+
+This phase should:
+
+- Run preflight automatically before every simulation run.
+- Block simulation launch cleanly when setup is invalid.
+- Export a real script.
+- Run successfully from the FreeCAD workflow.
+- Produce logs, solver output, and result files.
+- Serve as the final integration check for the MVP.
+
+Reason:
+
+The full end-to-end runnable case makes more sense as the last integration phase, after the needed setup features are already implemented.
+
+Commit-sized tasks:
+
+1. Commit 10.1: Enforce automatic preflight invocation before simulation run command executes.
+2. Commit 10.2: Improve run-time reporting so preflight failures are shown clearly and block solver launch.
+3. Commit 10.3: Add one stable end-to-end example that passes preflight, exports, runs, and produces output files.
+4. Commit 10.4: Add execution tests covering auto-preflight, run gating behavior, and final MVP workflow stability.
 
 ## What is included in the first MVP
 
@@ -340,6 +351,8 @@ The first MVP should include:
 - Automatic simulation box.
 - Boundary conditions setup.
 - Mesh setup tied to the real model.
+- Waveguide setup on a selected simulation-box face.
+- Excitation setup with supported time-profile options.
 - Real geometry and material export.
 - Automatic preflight before run.
 - Consistent FreeCAD to openEMS unit handling.
@@ -410,9 +423,9 @@ The best path is not to jump directly to the most advanced case.
 The best path is:
 
 1. Make the current pipeline real and reliable.
-2. Make one simple case work fully.
-3. Add the missing coax-specific features.
-4. Use the coax case as the scientific acceptance test.
+2. Add the missing coax-specific setup features in a clear order.
+3. Use the coax case as the scientific acceptance workflow.
+4. Stabilize one full end-to-end runnable MVP case.
 5. Later add result viewing inside FreeCAD.
 
 This keeps development incremental, testable, and easier to debug.
