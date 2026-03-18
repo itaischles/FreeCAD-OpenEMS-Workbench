@@ -632,6 +632,106 @@ def _geometry_in_analysis(analysis: Any) -> list[Any]:
     return geometry
 
 
+def _collect_stl_fallback_geometry(analysis: Any) -> list[Any]:
+    geometry = _geometry_in_analysis(analysis)
+    if not geometry:
+        return []
+
+    try:
+        try:
+            from exporter.geometry_classifier import classify_geometry_object
+        except ImportError:
+            from OpenEMSWorkbench.exporter.geometry_classifier import classify_geometry_object
+    except Exception:
+        return []
+
+    fallback_objects: list[Any] = []
+    for obj in geometry:
+        try:
+            geometry_kind = str(classify_geometry_object(obj) or "").strip().lower()
+        except Exception:
+            geometry_kind = ""
+        if geometry_kind not in {"box", "cylinder"}:
+            fallback_objects.append(obj)
+    return fallback_objects
+
+
+def _inspect_runtime_for_stl_reader(executable: str):
+    try:
+        try:
+            from execution.runtime_discovery import inspect_python_runtime
+        except ImportError:
+            from OpenEMSWorkbench.execution.runtime_discovery import inspect_python_runtime
+    except Exception as exc:
+        raise RuntimeError(f"Failed to load runtime discovery: {exc}") from exc
+    return inspect_python_runtime(executable)
+
+
+def _check_stl_fallback_runtime_support(analysis: Any, members) -> list[PreflightFinding]:
+    findings: list[PreflightFinding] = []
+    if not members.simulations:
+        return findings
+
+    fallback_objects = _collect_stl_fallback_geometry(analysis)
+    if not fallback_objects:
+        return findings
+
+    sim = members.simulations[0]
+    executable = str(getattr(sim, "SolverExecutable", "") or "").strip()
+    if not executable:
+        findings.append(
+            _finding(
+                "warning",
+                "simulation.stl_reader_runtime_unchecked",
+                "Analysis contains geometry that will export through STL fallback. Configure SolverExecutable to verify CSXCAD STL-reader support before runnable export.",
+                sim,
+            )
+        )
+        return findings
+
+    try:
+        runtime_result = _inspect_runtime_for_stl_reader(executable)
+    except Exception as exc:
+        findings.append(
+            _finding(
+                "warning",
+                "simulation.stl_reader_runtime_check_failed",
+                f"Could not evaluate STL-reader support for SolverExecutable '{executable}': {exc}",
+                sim,
+            )
+        )
+        return findings
+
+    if not runtime_result.ok:
+        findings.append(
+            _finding(
+                "warning",
+                "simulation.stl_reader_runtime_check_failed",
+                (
+                    "Could not confirm STL-reader support for STL fallback geometry with the configured runtime "
+                    f"'{executable}': {runtime_result.message}"
+                ),
+                sim,
+            )
+        )
+        return findings
+
+    if not bool(runtime_result.capabilities.get("stl_reader", False)):
+        findings.append(
+            _finding(
+                "error",
+                "simulation.stl_reader_required",
+                (
+                    "Configured SolverExecutable does not expose the CSXCAD STL reader required for fallback geometry. "
+                    f"Runtime '{executable}' reported: {runtime_result.message}"
+                ),
+                sim,
+            )
+        )
+
+    return findings
+
+
 def _check_material_assignments(analysis: Any, members) -> list[PreflightFinding]:
     findings: list[PreflightFinding] = []
     geometry = _geometry_in_analysis(analysis)
@@ -712,6 +812,7 @@ def run_preflight(analysis: Any) -> list[PreflightFinding]:
     findings.extend(_check_dumpbox_frequency(members))
     findings.extend(_check_output_directory(members))
     findings.extend(_check_solver_configuration(members))
+    findings.extend(_check_stl_fallback_runtime_support(analysis, members))
     findings.extend(_check_unit_contract(members))
     findings.extend(_check_excitation(members))
     findings.extend(_check_port_configuration(analysis, members))

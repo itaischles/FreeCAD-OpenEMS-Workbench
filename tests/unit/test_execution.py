@@ -234,6 +234,24 @@ def test_validate_configured_solver_runtime_rejects_openems_binary():
     assert "openEMS.exe" in message
 
 
+def test_validate_configured_solver_runtime_reports_stl_reader_capability(monkeypatch):
+    from OpenEMSWorkbench import execution
+
+    simulation = _SimulationStub(executable="C:/Python/python.exe")
+    analysis = _AnalysisStub(simulation)
+
+    monkeypatch.setattr(
+        execution,
+        "validate_python_runtime",
+        lambda executable: (True, f"Python runtime check passed: {executable} (STL reader: available)"),
+    )
+
+    ok, message = execution.validate_configured_solver_runtime(analysis)
+
+    assert ok
+    assert "STL reader: available" in message
+
+
 def test_run_analysis_adds_unbuffered_flag_for_python(monkeypatch, tmp_path):
     from OpenEMSWorkbench import execution
 

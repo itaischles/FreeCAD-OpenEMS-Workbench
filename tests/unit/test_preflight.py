@@ -406,3 +406,70 @@ def test_preflight_enforces_delta_unit_contract():
 
     findings = run_preflight(analysis)
     assert any(f.check_id == "simulation.delta_unit_contract" for f in findings)
+
+
+def test_preflight_warns_when_stl_fallback_runtime_is_not_configured():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    geometry = GeoObj("GeoComplex", TypeId="Part::Feature")
+    analysis.Group.append(geometry)
+    material = analysis.Group[2]
+    material.AssignedGeometry = [geometry]
+
+    findings = run_preflight(analysis)
+
+    assert any(f.check_id == "simulation.stl_reader_runtime_unchecked" for f in findings)
+
+
+def test_preflight_rejects_stl_fallback_when_runtime_lacks_reader(monkeypatch):
+    from OpenEMSWorkbench.validation import preflight
+
+    analysis = _minimal_valid_analysis()
+    geometry = GeoObj("GeoComplex", TypeId="Part::Feature")
+    analysis.Group.append(geometry)
+    material = analysis.Group[2]
+    material.AssignedGeometry = [geometry]
+    simulation = analysis.Group[0]
+    simulation.SolverExecutable = "C:/Python/python.exe"
+
+    monkeypatch.setattr(
+        preflight,
+        "_inspect_runtime_for_stl_reader",
+        lambda executable: type(
+            "RuntimeResult",
+            (),
+            {"ok": True, "message": "STL reader: unavailable", "capabilities": {"stl_reader": False}},
+        )(),
+    )
+
+    findings = preflight.run_preflight(analysis)
+
+    assert any(f.check_id == "simulation.stl_reader_required" for f in findings)
+
+
+def test_preflight_accepts_stl_fallback_when_runtime_has_reader(monkeypatch):
+    from OpenEMSWorkbench.validation import preflight
+
+    analysis = _minimal_valid_analysis()
+    geometry = GeoObj("GeoComplex", TypeId="Part::Feature")
+    analysis.Group.append(geometry)
+    material = analysis.Group[2]
+    material.AssignedGeometry = [geometry]
+    simulation = analysis.Group[0]
+    simulation.SolverExecutable = "C:/Python/python.exe"
+
+    monkeypatch.setattr(
+        preflight,
+        "_inspect_runtime_for_stl_reader",
+        lambda executable: type(
+            "RuntimeResult",
+            (),
+            {"ok": True, "message": "STL reader: available", "capabilities": {"stl_reader": True}},
+        )(),
+    )
+
+    findings = preflight.run_preflight(analysis)
+
+    assert not any(f.check_id == "simulation.stl_reader_required" for f in findings)
+    assert not any(f.check_id == "simulation.stl_reader_runtime_unchecked" for f in findings)

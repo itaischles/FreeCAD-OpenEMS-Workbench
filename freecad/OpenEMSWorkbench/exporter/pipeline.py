@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import struct
 
 try:
     from exporter.document_reader import read_analysis_for_export
@@ -64,6 +65,96 @@ def _mesh_lines_to_dict(mesh) -> dict:
     }
 
 
+def _polyhedron_geometries(model: ExportModel) -> list:
+    return [geo for geo in model.geometries if getattr(geo, "primitive", "") == "polyhedron"]
+
+
+def _stl_path_for_geometry(geo) -> Path:
+    path_text = str(
+        getattr(getattr(geo, "stl_artifact", None), "path", "")
+        or geo.params.get("stl_path", "")
+    ).strip()
+    return Path(path_text)
+
+
+def _looks_like_ascii_stl(header: bytes, trailer: bytes) -> bool:
+    return header.lstrip().lower().startswith(b"solid") and b"endsolid" in trailer.lower()
+
+
+def _looks_like_binary_stl(path: Path) -> bool:
+    size = path.stat().st_size
+    if size < 84:
+        return False
+    with path.open("rb") as handle:
+        handle.seek(80)
+        triangle_count = struct.unpack("<I", handle.read(4))[0]
+    expected_size = 84 + triangle_count * 50
+    return expected_size == size
+
+
+def _validate_stl_artifact(geo) -> None:
+    stl_path = _stl_path_for_geometry(geo)
+    if not str(stl_path):
+        raise ValueError(f"STL-backed geometry '{geo.object_name}' does not define an STL file path.")
+    if not stl_path.exists() or not stl_path.is_file():
+        raise ValueError(f"STL-backed geometry '{geo.object_name}' is missing its STL file: {stl_path}")
+    if stl_path.stat().st_size <= 0:
+        raise ValueError(f"STL-backed geometry '{geo.object_name}' has an empty STL file: {stl_path}")
+
+    with stl_path.open("rb") as handle:
+        header = handle.read(256)
+        handle.seek(max(stl_path.stat().st_size - 256, 0))
+        trailer = handle.read(256)
+
+    if _looks_like_ascii_stl(header, trailer):
+        return
+    if _looks_like_binary_stl(stl_path):
+        return
+
+    raise ValueError(
+        f"STL-backed geometry '{geo.object_name}' produced an invalid STL artifact that is neither valid ASCII STL nor valid binary STL: {stl_path}"
+    )
+
+
+def _validate_stl_fallback_geometries(model: ExportModel, *, runnable: bool) -> None:
+    polyhedrons = _polyhedron_geometries(model)
+    if not polyhedrons:
+        return
+
+    for geo in polyhedrons:
+        _validate_stl_artifact(geo)
+
+    if not runnable:
+        return
+
+    executable = str((model.simulation or {}).get("SolverExecutable") or "").strip()
+    if not executable:
+        raise ValueError(
+            "Runnable export with STL-backed geometry requires SolverExecutable to be configured so STL-reader support can be validated."
+        )
+
+    try:
+        try:
+            from execution.runtime_discovery import inspect_python_runtime
+        except ImportError:
+            from OpenEMSWorkbench.execution.runtime_discovery import inspect_python_runtime
+    except Exception as exc:
+        raise ValueError(f"Failed to load runtime capability checks for STL-backed geometry: {exc}") from exc
+
+    runtime_result = inspect_python_runtime(executable)
+    if not runtime_result.ok:
+        raise ValueError(
+            "Runnable export with STL-backed geometry requires a Python runtime with openEMS/CSXCAD modules. "
+            f"Runtime check failed for '{executable}': {runtime_result.message}"
+        )
+
+    if not bool(runtime_result.capabilities.get("stl_reader", False)):
+        raise ValueError(
+            "Selected Python runtime does not expose the CSXCAD STL reader required for STL-backed geometry. "
+            f"Runtime '{executable}' reported: {runtime_result.message}"
+        )
+
+
 def _build_export_model(extracted: dict, stl_dir: Path, analysis=None) -> ExportModel:
     assignment_lookup = _build_assignment_lookup(extracted)
     mesh_lines = {}
@@ -119,6 +210,7 @@ def export_analysis_dry_run(analysis, base_output_dir: str | Path, document_name
     paths = build_export_paths(base_output_dir, document_name, extracted["analysis_name"])
     ensure_export_dirs(paths)
     model = _build_export_model(extracted, paths["stl_dir"], analysis=analysis)
+    _validate_stl_fallback_geometries(model, runnable=False)
     generate_openems_script(model, paths["script"], runnable=False)
     return _result_dict(paths, model)
 
@@ -137,6 +229,7 @@ def export_analysis_run_ready(
     run_dir.mkdir(parents=True, exist_ok=True)
 
     model = _build_export_model(extracted, paths["stl_dir"], analysis=analysis)
+    _validate_stl_fallback_geometries(model, runnable=True)
     generate_openems_script(
         model,
         paths["script"],

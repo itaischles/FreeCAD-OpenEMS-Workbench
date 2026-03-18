@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 try:
-    from exporter.model import GeometryEntry
+    from exporter.model import GeometryEntry, StlArtifact
 except ImportError:
-    from OpenEMSWorkbench.exporter.model import GeometryEntry
+    from OpenEMSWorkbench.exporter.model import GeometryEntry, StlArtifact
 
 
 def _write_placeholder_stl(path: Path) -> None:
@@ -38,5 +38,5 @@ def export_as_stl_entry(obj, stl_dir: Path) -> GeometryEntry:
         object_name=object_name,
         object_label=object_label,
         primitive="polyhedron",
-        params={"stl_path": str(stl_path)},
+        stl_artifact=StlArtifact(path=str(stl_path)),
     )

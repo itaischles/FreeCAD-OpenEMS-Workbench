@@ -96,6 +96,13 @@ def _scale_vec3(values: list[float], scale: float) -> list[float]:
     return [round(float(values[0]) * scale, 12), round(float(values[1]) * scale, 12), round(float(values[2]) * scale, 12)]
 
 
+def _stl_path_for_geometry(geo) -> str:
+    return str(
+        getattr(getattr(geo, "stl_artifact", None), "path", "")
+        or geo.params.get("stl_path", "")
+    )
+
+
 def _safe_symbol(value: str) -> str:
     text = str(value or "").strip()
     if not text:
@@ -389,6 +396,7 @@ def generate_openems_script(
     lines.append("    os.add_dll_directory(_openems_root)")
     lines.append("import math")
     lines.append("import CSXCAD")
+    lines.append("from CSXCAD import CSPrimitives")
     lines.append("import openEMS")
     lines.append("from pathlib import Path")
     lines.append("")
@@ -463,16 +471,55 @@ def generate_openems_script(
     lines.append("")
 
     lines.append("# Geometry mapping")
-    primitive_geometries = [geo for geo in model.geometries if geo.primitive in {"box", "cylinder"}]
+    geometries_with_primitives = [geo for geo in model.geometries if geo.primitive in {"box", "cylinder", "polyhedron"}]
+    has_polyhedron_geometries = any(geo.primitive == "polyhedron" for geo in model.geometries)
 
-    if primitive_geometries:
+    if geometries_with_primitives:
         needs_unassigned = any(
             str(getattr(geo, "assigned_material_name", "") or "").strip() not in material_vars
-            for geo in primitive_geometries
+            for geo in geometries_with_primitives
         )
         if needs_unassigned:
             lines.append("_phase33_unassigned_prop = CSX.AddMaterial('_phase33_unassigned')")
             lines.append("_phase33_unassigned_prop.SetMaterialProperty(epsilon=1.0, mue=1.0, kappa=0.0)")
+
+    if has_polyhedron_geometries:
+        lines.append("def _add_polyhedron_reader(prop, stl_path, priority):")
+        lines.append("    if not os.path.isfile(stl_path):")
+        lines.append("        raise FileNotFoundError(f'STL geometry file not found: {stl_path}')")
+        lines.append("    stl_file_type = getattr(CSPrimitives, 'STL_FILE', None)")
+        lines.append("    add_reader = getattr(prop, 'AddPolyhedronReader', None)")
+        lines.append("    if add_reader is None:")
+        lines.append("        raise RuntimeError('CSXCAD property object does not expose AddPolyhedronReader for STL-backed geometry.')")
+        lines.append("    attempts = [")
+        lines.append("        lambda: add_reader(stl_path, stl_file_type, priority),")
+        lines.append("        lambda: add_reader(stl_path, stl_file_type),")
+        lines.append("        lambda: add_reader(stl_path),")
+        lines.append("        lambda: add_reader(filename=stl_path, file_type=stl_file_type, priority=priority),")
+        lines.append("        lambda: add_reader(filename=stl_path, file_type=stl_file_type),")
+        lines.append("        lambda: add_reader(filename=stl_path),")
+        lines.append("    ]")
+        lines.append("    for call in attempts:")
+        lines.append("        try:")
+        lines.append("            return call()")
+        lines.append("        except TypeError:")
+        lines.append("            continue")
+        lines.append("    reader = add_reader()")
+        lines.append("    if reader is None:")
+        lines.append("        raise RuntimeError('AddPolyhedronReader returned no reader object for STL-backed geometry.')")
+        lines.append("    if hasattr(reader, 'SetFilename'):")
+        lines.append("        reader.SetFilename(stl_path)")
+        lines.append("    if stl_file_type is not None and hasattr(reader, 'SetFileType'):")
+        lines.append("        reader.SetFileType(stl_file_type)")
+        lines.append("    if hasattr(reader, 'SetPriority'):")
+        lines.append("        reader.SetPriority(priority)")
+        lines.append("    read_file = getattr(reader, 'ReadFile', None)")
+        lines.append("    if callable(read_file):")
+        lines.append("        read_ok = read_file()")
+        lines.append("        if read_ok is False:")
+        lines.append("            raise RuntimeError(f'Failed to read STL geometry: {stl_path}')")
+        lines.append("    return reader")
+        lines.append("")
 
     for geo in sorted(model.geometries, key=lambda item: item.object_name):
         if geo.primitive == "box":
@@ -498,8 +545,14 @@ def generate_openems_script(
                 f"# CYLINDER {geo.object_name}: base={base} r={radius} h={height}"
             )
         elif geo.primitive == "polyhedron":
+            stl_path = _stl_path_for_geometry(geo)
+            material_name = str(getattr(geo, "assigned_material_name", "") or "").strip()
+            prop_var = material_vars.get(material_name, "_phase33_unassigned_prop")
+            priority = _as_int(getattr(geo, "assignment_priority", 0), 0)
+            poly_symbol = f"poly_{_safe_symbol(geo.object_name)}"
+            lines.append(f"{poly_symbol} = _add_polyhedron_reader({prop_var}, {stl_path!r}, priority={priority})")
             lines.append(
-                f"# POLYHEDRON {geo.object_name}: stl={geo.params['stl_path']}"
+                f"# POLYHEDRON {geo.object_name}: stl={stl_path}"
             )
     lines.append("")
 

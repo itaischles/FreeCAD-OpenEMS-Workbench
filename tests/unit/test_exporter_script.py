@@ -19,7 +19,7 @@ def _default_mesh_lines() -> dict:
 
 
 def test_script_generator_writes_expected_lines(tmp_path):
-    from OpenEMSWorkbench.exporter.model import ExportModel, GeometryEntry
+    from OpenEMSWorkbench.exporter.model import ExportModel, GeometryEntry, StlArtifact
     from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
 
     model = ExportModel(
@@ -72,7 +72,14 @@ def test_script_generator_writes_expected_lines(tmp_path):
                 assigned_material_name="FR4",
                 assignment_priority=3,
             ),
-            GeometryEntry("P", "Poly", "polyhedron", {"stl_path": "C:/tmp/p.stl"}),
+            GeometryEntry(
+                "P",
+                "Poly",
+                "polyhedron",
+                assigned_material_name="Copper",
+                assignment_priority=11,
+                stl_artifact=StlArtifact(path="C:/tmp/p.stl"),
+            ),
         ],
     )
     path = generate_openems_script(model, tmp_path / "script.py")
@@ -90,9 +97,42 @@ def test_script_generator_writes_expected_lines(tmp_path):
     assert "AddBox([0.0, 0.0, 0.0], [1.0, 1.0, 1.0], priority=7)" in text
     assert "AddCylinder([1.0, 2.0, 3.0], [1.0, 2.0, 7.0], 0.5, priority=3)" in text
     assert "_phase33_unassigned_prop" not in text
+    assert "from CSXCAD import CSPrimitives" in text
+    assert "def _add_polyhedron_reader(prop, stl_path, priority):" in text
+    assert "poly_P = _add_polyhedron_reader(mat_0_Copper, 'C:/tmp/p.stl', priority=11)" in text
+    assert "AddPolyhedronReader" in text
     assert "# BOX B" in text
     assert "# CYLINDER C" in text
     assert "# POLYHEDRON P" in text
+
+
+def test_script_generator_uses_unassigned_fallback_for_missing_polyhedron_binding(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel, GeometryEntry, StlArtifact
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={"ExcitationType": "Gaussian", "ExcitationF0": 1e9, "ExcitationFc": 5e8},
+        grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
+        materials=[{"name": "Copper", "IsPEC": True}],
+        geometries=[
+            GeometryEntry(
+                "P",
+                "Poly",
+                "polyhedron",
+                assigned_material_name="MissingMat",
+                assignment_priority=6,
+                stl_artifact=StlArtifact(path="C:/tmp/p.stl"),
+            )
+        ],
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_missing_poly.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "_phase33_unassigned_prop = CSX.AddMaterial('_phase33_unassigned')" in text
+    assert "poly_P = _add_polyhedron_reader(_phase33_unassigned_prop, 'C:/tmp/p.stl', priority=6)" in text
 
 
 def test_script_generator_writes_run_lines_when_runnable(tmp_path):
