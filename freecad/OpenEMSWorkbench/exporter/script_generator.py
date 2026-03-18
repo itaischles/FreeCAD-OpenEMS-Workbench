@@ -431,6 +431,40 @@ def _coax_tem_field_lines(
         lines.append(f"    s = {fn_prefix}_prop_sign")
         lines.append("    return (s * h_mag * dz / rho, 0.0, -s * h_mag * dx / rho)")
     lines.append("")
+    if axis == "z":
+        lines.append(f"{fn_prefix}_E_expr = [")
+        lines.append(f"    '((x-({fn_prefix}_cx))/(((x-({fn_prefix}_cx))**2 + (y-({fn_prefix}_cy))**2)*{fn_prefix}_ln_ba))',")
+        lines.append(f"    '((y-({fn_prefix}_cy))/(((x-({fn_prefix}_cx))**2 + (y-({fn_prefix}_cy))**2)*{fn_prefix}_ln_ba))',")
+        lines.append("    '0',")
+        lines.append("]")
+        lines.append(f"{fn_prefix}_H_expr = [")
+        lines.append(f"    '(-{fn_prefix}_prop_sign*(y-({fn_prefix}_cy))/(2*pi*{fn_prefix}_z0*((x-({fn_prefix}_cx))**2 + (y-({fn_prefix}_cy))**2)))',")
+        lines.append(f"    '( {fn_prefix}_prop_sign*(x-({fn_prefix}_cx))/(2*pi*{fn_prefix}_z0*((x-({fn_prefix}_cx))**2 + (y-({fn_prefix}_cy))**2)))',")
+        lines.append("    '0',")
+        lines.append("]")
+    elif axis == "x":
+        lines.append(f"{fn_prefix}_E_expr = [")
+        lines.append("    '0',")
+        lines.append(f"    '((y-({fn_prefix}_cy))/(((y-({fn_prefix}_cy))**2 + (z-({fn_prefix}_cz))**2)*{fn_prefix}_ln_ba))',")
+        lines.append(f"    '((z-({fn_prefix}_cz))/(((y-({fn_prefix}_cy))**2 + (z-({fn_prefix}_cz))**2)*{fn_prefix}_ln_ba))',")
+        lines.append("]")
+        lines.append(f"{fn_prefix}_H_expr = [")
+        lines.append("    '0',")
+        lines.append(f"    '(-{fn_prefix}_prop_sign*(z-({fn_prefix}_cz))/(2*pi*{fn_prefix}_z0*((y-({fn_prefix}_cy))**2 + (z-({fn_prefix}_cz))**2)))',")
+        lines.append(f"    '( {fn_prefix}_prop_sign*(y-({fn_prefix}_cy))/(2*pi*{fn_prefix}_z0*((y-({fn_prefix}_cy))**2 + (z-({fn_prefix}_cz))**2)))',")
+        lines.append("]")
+    else:
+        lines.append(f"{fn_prefix}_E_expr = [")
+        lines.append(f"    '((x-({fn_prefix}_cx))/(((x-({fn_prefix}_cx))**2 + (z-({fn_prefix}_cz))**2)*{fn_prefix}_ln_ba))',")
+        lines.append("    '0',")
+        lines.append(f"    '((z-({fn_prefix}_cz))/(((x-({fn_prefix}_cx))**2 + (z-({fn_prefix}_cz))**2)*{fn_prefix}_ln_ba))',")
+        lines.append("]")
+        lines.append(f"{fn_prefix}_H_expr = [")
+        lines.append(f"    '( {fn_prefix}_prop_sign*(z-({fn_prefix}_cz))/(2*pi*{fn_prefix}_z0*((x-({fn_prefix}_cx))**2 + (z-({fn_prefix}_cz))**2)))',")
+        lines.append("    '0',")
+        lines.append(f"    '(-{fn_prefix}_prop_sign*(x-({fn_prefix}_cx))/(2*pi*{fn_prefix}_z0*((x-({fn_prefix}_cx))**2 + (z-({fn_prefix}_cz))**2)))',")
+        lines.append("]")
+    lines.append("")
     lines.append(f"port_{number}_waveguide_tem = {{")
     lines.append(f"    'number': {number},")
     lines.append(f"    'axis': '{axis}',")
@@ -440,6 +474,8 @@ def _coax_tem_field_lines(
         lines.append(f"    'reference_plane': {reference_plane},")
     lines.append(f"    'E_func': {fn_prefix}_E,")
     lines.append(f"    'H_func': {fn_prefix}_H,")
+    lines.append(f"    'E_expr': {fn_prefix}_E_expr,")
+    lines.append(f"    'H_expr': {fn_prefix}_H_expr,")
     lines.append("}")
 
     direction_axis, reverse = _normalize_direction(raw_direction)
@@ -462,11 +498,16 @@ def _coax_tem_field_lines(
 
     excite = 1.0 if bool(port.get("Excite", False)) else 0.0
     if source_start_stop is not None:
-        start, stop = source_start_stop
+        if reference_start_stop is not None:
+            # openEMS AddWaveGuidePort requires non-zero span along propagation axis.
+            start = list(source_start_stop[0])
+            stop = list(reference_start_stop[1])
+        else:
+            start, stop = source_start_stop
         if reverse:
             start, stop = stop, start
         lines.append(
-            f"port_{number}_waveguide = _add_waveguide_port(FDTD, {number}, {start}, {stop}, '{direction_axis}', {excite}, {fn_prefix}_E, {fn_prefix}_H)"
+            f"port_{number}_waveguide = _add_waveguide_port(FDTD, {number}, {start}, {stop}, '{direction_axis}', {fn_prefix}_E, {fn_prefix}_H, {fn_prefix}_E_expr, {fn_prefix}_H_expr, 0.0, {excite})"
         )
     else:
         lines.append(
@@ -696,11 +737,16 @@ def generate_openems_script(
     has_waveguide_port = any(str(port.get("PortType", "")).strip() == "Waveguide" for port in model.ports)
     if has_waveguide_port:
         lines.append("# Waveguide port adapter")
-        lines.append("def _add_waveguide_port(fdtd, number, start, stop, direction, excite, e_func, h_func):")
+        lines.append("def _add_waveguide_port(fdtd, number, start, stop, direction, e_func, h_func, e_expr, h_expr, kc, excite):")
         lines.append("    attempts = [")
-        lines.append("        lambda: fdtd.AddWaveGuidePort(number, start, stop, direction, excite, e_func, h_func),")
-        lines.append("        lambda: fdtd.AddWaveGuidePort(number, start, stop, direction, e_func, h_func, excite),")
-        lines.append("        lambda: fdtd.AddWaveGuidePort(num=number, start=start, stop=stop, p_dir=direction, excite=excite, E_func=e_func, H_func=h_func),")
+        lines.append("        # Canonical signature in current openEMS wheels: AddWaveGuidePort(..., E_func, H_func, kc, excite=0)")
+        lines.append("        lambda: fdtd.AddWaveGuidePort(number, start, stop, direction, e_func, h_func, kc, excite),")
+        lines.append("        lambda: fdtd.AddWaveGuidePort(number, start, stop, direction, e_func, h_func, kc),")
+        lines.append("        lambda: fdtd.AddWaveGuidePort(num=number, start=start, stop=stop, p_dir=direction, E_func=e_func, H_func=h_func, kc=kc, excite=excite),")
+        lines.append("        lambda: fdtd.AddWaveGuidePort(num=number, start=start, stop=stop, p_dir=direction, E_func=e_func, H_func=h_func, kc=kc),")
+        lines.append("        # Some openEMS builds expect iterable mode expressions rather than Python callables.")
+        lines.append("        lambda: fdtd.AddWaveGuidePort(number, start, stop, direction, e_expr, h_expr, kc, excite),")
+        lines.append("        lambda: fdtd.AddWaveGuidePort(number, start, stop, direction, e_expr, h_expr, kc),")
         lines.append("    ]")
         lines.append("    for call in attempts:")
         lines.append("        try:")

@@ -370,8 +370,11 @@ def test_script_generator_exports_tem_field_functions_for_waveguide_coax(tmp_pat
     assert "'source_plane': 3.0" in text
     assert "'reference_plane': 4.0" in text
     assert "'E_func': port_1_coax_tem_E" in text
+    assert "'E_expr': port_1_coax_tem_E_expr" in text
     assert "'H_func': port_1_coax_tem_H" in text
-    assert "def _add_waveguide_port(fdtd, number, start, stop, direction, excite, e_func, h_func):" in text
+    assert "'H_expr': port_1_coax_tem_H_expr" in text
+    assert "def _add_waveguide_port(fdtd, number, start, stop, direction, e_func, h_func, e_expr, h_expr, kc, excite):" in text
+    assert "AddWaveGuidePort(number, start, stop, direction, e_expr, h_expr, kc, excite)" in text
     assert "port_1_waveguide = _add_waveguide_port(FDTD, 1" in text
     assert "port_1_waveguide_reference_start = [-5.0, -5.0, 4.0]" in text
     assert "port_1_waveguide_reference_stop = [5.0, 5.0, 4.0]" in text

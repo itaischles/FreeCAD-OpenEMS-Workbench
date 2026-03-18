@@ -93,15 +93,6 @@ class SimulationTaskPanel(BaseObjectTaskPanel):
     _EXCITATION_SINUSOID_FIELDS = ["SinusoidAmplitude", "SinusoidFrequency", "SinusoidPhaseDeg"]
     _EXCITATION_CUSTOM_FIELDS = ["CustomExcitationExpression"]
 
-
-def excitation_visibility_flags(excitation_type: str) -> tuple[bool, bool, bool]:
-    text = str(excitation_type or "Gaussian").strip().lower()
-    if text in {"sinusoid", "sinusoidal"}:
-        return False, True, False
-    if text in {"custom", "custom-expression", "custom_expression"}:
-        return False, False, True
-    return True, False, False
-
     def _field_by_name(self, name: str) -> dict:
         return next(field for field in self.FIELDS if field["name"] == name)
 
@@ -310,3 +301,12 @@ def excitation_visibility_flags(excitation_type: str) -> tuple[bool, bool, bool]
         else:
             Gui.Control.closeDialog()
         return True
+
+
+def excitation_visibility_flags(excitation_type: str) -> tuple[bool, bool, bool]:
+    text = str(excitation_type or "Gaussian").strip().lower()
+    if text in {"sinusoid", "sinusoidal"}:
+        return False, True, False
+    if text in {"custom", "custom-expression", "custom_expression"}:
+        return False, False, True
+    return True, False, False
