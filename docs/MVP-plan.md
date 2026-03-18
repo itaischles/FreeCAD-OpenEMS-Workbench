@@ -252,7 +252,39 @@ Commit-sized tasks:
 9. Commit 6.9: Calculate and export the coaxial waveguide spatial field functions (`E` and `H`) for the supported axis-aligned coax case.
 10. Commit 6.10: Implement the full exporter path from FreeCAD workbench waveguide/coax port data to openEMS script generation, and add tests for valid and invalid cases.
 
-### Phase 7: add excitation setup support
+### Phase 7: export STL fallback geometry through the openEMS STL reader
+
+The exporter already writes `.stl` files for unsupported geometry, but that path still stops short of creating real openEMS geometry in the generated Python script.
+
+This phase should:
+
+- Keep boxes and cylinders on the current direct primitive-export path.
+- Export unsupported FreeCAD solid geometry as `.stl` files through the existing fallback path.
+- Feed those exported `.stl` files into the openEMS/CSXCAD polyhedron reader when the installed Python runtime supports it.
+- Preserve assigned material binding and primitive priority for STL-backed geometry the same way direct primitives already do.
+- Validate that runnable export is only allowed when the selected openEMS/CSXCAD Python runtime actually supports the STL reader path.
+- Fail clearly when the STL reader is unavailable or the exported STL artifact is missing or unusable.
+
+Reason:
+
+The repository already has a partial STL fallback path, but not a real simulation-geometry path for those fallback files. This phase closes that gap while keeping scope focused and compatible with the existing exporter design.
+
+Recommended MVP target:
+
+- Support STL-backed geometry only for shapes that already fall through the existing fallback path.
+- Use the documented Python reader-backed polyhedron path first, not manual STL triangle parsing.
+- Treat STL reader availability as a runtime capability that must be checked explicitly.
+- If the runtime does not provide the STL reader, stop with a clear preflight or export error rather than generating a misleading placeholder script.
+
+Commit-sized tasks:
+
+1. Commit 7.1: Define the STL-backed export contract so fallback geometries carry the STL path, assigned material, and priority cleanly through the export model.
+2. Commit 7.2: Extend runtime capability discovery so runnable export can detect whether the installed openEMS/CSXCAD Python binding supports the STL reader path.
+3. Commit 7.3: Replace the current comment-only polyhedron script output with real CSXCAD STL-reader-backed geometry emission in the generated Python script.
+4. Commit 7.4: Add export and preflight checks for reader availability, missing STL files, empty or invalid STL artifacts, and clear user-facing failure messages.
+5. Commit 7.5: Add tests for valid STL-backed export, preserved material and priority binding, reader-unavailable behavior, and invalid artifact handling.
+
+### Phase 8: add excitation setup support
 
 The coax target also needs real excitation setup, but this should stay separate from the waveguide spatial setup.
 
@@ -271,13 +303,13 @@ This phase is about how the source behaves in time. It should stay separate from
 
 Commit-sized tasks:
 
-1. Commit 7.1: Extend the simulation model and panel so excitation type, main frequency settings, and source magnitude are clearly defined.
-2. Commit 7.2: Add preflight checks for valid Gaussian and sinusoidal excitation settings.
-3. Commit 7.3: Map excitation modes to the correct openEMS script calls while preserving the Phase 6 waveguide spatial setup.
-4. Commit 7.4: Add tests for Gaussian and sinusoidal export paths.
-5. Commit 7.5: Remove legacy placeholder excitation branches and keep one clean excitation path set.
+1. Commit 8.1: Extend the simulation model and panel so excitation type, main frequency settings, and source magnitude are clearly defined.
+2. Commit 8.2: Add preflight checks for valid Gaussian and sinusoidal excitation settings.
+3. Commit 8.3: Map excitation modes to the correct openEMS script calls while preserving the Phase 6 waveguide spatial setup.
+4. Commit 8.4: Add tests for Gaussian and sinusoidal export paths.
+5. Commit 8.5: Remove legacy placeholder excitation branches and keep one clean excitation path set.
 
-### Phase 8: make dump boxes generate real field output
+### Phase 9: make dump boxes generate real field output
 
 DumpBox objects already exist, but they are still mostly placeholders in the exported script.
 
@@ -294,13 +326,13 @@ Field dump output is important for the MVP, but it should come after the core wa
 
 Commit-sized tasks:
 
-1. Commit 8.1: Extend dumpbox export model with explicit dump type and frequency handling.
-2. Commit 8.2: Generate real openEMS field-dump commands for at least electric-field outputs.
-3. Commit 8.3: Ensure dump output paths are created under the user-defined results folder.
-4. Commit 8.4: Add tests that verify dump commands and output path generation.
-5. Commit 8.5: Remove legacy placeholder dumpbox script stubs and temporary compatibility branches.
+1. Commit 9.1: Extend dumpbox export model with explicit dump type and frequency handling.
+2. Commit 9.2: Generate real openEMS field-dump commands for at least electric-field outputs.
+3. Commit 9.3: Ensure dump output paths are created under the user-defined results folder.
+4. Commit 9.4: Add tests that verify dump commands and output path generation.
+5. Commit 9.5: Remove legacy placeholder dumpbox script stubs and temporary compatibility branches.
 
-### Phase 9: build the coaxial-cable reference workflow
+### Phase 10: build the coaxial-cable reference workflow
 
 Once the previous phases are done, use a coaxial-cable example as the main acceptance test for the scientific workflow.
 
@@ -320,12 +352,12 @@ This is the real scientific use case that the MVP should demonstrate.
 
 Commit-sized tasks:
 
-1. Commit 9.1: Add a documented coax geometry setup example in the examples folder.
-2. Commit 9.2: Add documented material assignment, boundary setup, waveguide setup, and excitation setup for the coax case.
-3. Commit 9.3: Add documented expected export artifacts and output files for acceptance.
-4. Commit 9.4: Add a final verification checklist specifically for the coax reference workflow.
+1. Commit 10.1: Add a documented coax geometry setup example in the examples folder.
+2. Commit 10.2: Add documented material assignment, boundary setup, waveguide setup, and excitation setup for the coax case.
+3. Commit 10.3: Add documented expected export artifacts and output files for acceptance.
+4. Commit 10.4: Add a final verification checklist specifically for the coax reference workflow.
 
-### Phase 10: stabilize one full end-to-end runnable MVP case
+### Phase 11: stabilize one full end-to-end runnable MVP case
 
 After the missing building blocks are in place, finish by proving that one complete workflow runs from start to finish.
 
@@ -344,10 +376,10 @@ The full end-to-end runnable case makes more sense as the last integration phase
 
 Commit-sized tasks:
 
-1. Commit 10.1: Enforce automatic preflight invocation before simulation run command executes.
-2. Commit 10.2: Improve run-time reporting so preflight failures are shown clearly and block solver launch.
-3. Commit 10.3: Add one stable end-to-end example that passes preflight, exports, runs, and produces output files.
-4. Commit 10.4: Add execution tests covering auto-preflight, run gating behavior, and final MVP workflow stability.
+1. Commit 11.1: Enforce automatic preflight invocation before simulation run command executes.
+2. Commit 11.2: Improve run-time reporting so preflight failures are shown clearly and block solver launch.
+3. Commit 11.3: Add one stable end-to-end example that passes preflight, exports, runs, and produces output files.
+4. Commit 11.4: Add execution tests covering auto-preflight, run gating behavior, and final MVP workflow stability.
 
 ## What is included in the first MVP
 
@@ -360,6 +392,7 @@ The first MVP should include:
 - Boundary conditions setup.
 - Mesh setup tied to the real model.
 - Waveguide setup on a selected simulation-box face.
+- STL-backed fallback geometry export when supported by the selected openEMS runtime.
 - Excitation setup with supported time-profile options.
 - Real geometry and material export.
 - Automatic preflight before run.
@@ -394,7 +427,7 @@ For every phase:
 Important manual checks:
 
 - Assign materials and confirm they remain assigned after reopening the document.
-- Inspect generated scripts and confirm real geometry and material commands exist.
+- Inspect generated scripts and confirm real geometry, material commands, and STL-backed reader geometry commands exist when fallback export is used.
 - Change geometry size and confirm simulation box and mesh update correctly.
 - Verify unit conversion with at least one geometry model created in millimeters.
 - Run a simulation and confirm preflight is run automatically first.
@@ -413,6 +446,7 @@ The most important files for this plan are:
 - freecad/OpenEMSWorkbench/exporter/script_generator.py
 - freecad/OpenEMSWorkbench/exporter/geometry_classifier.py
 - freecad/OpenEMSWorkbench/exporter/primitive_mapper.py
+- freecad/OpenEMSWorkbench/exporter/stl_fallback.py
 - freecad/OpenEMSWorkbench/meshing/__init__.py
 - freecad/OpenEMSWorkbench/objects/port_feature.py
 - freecad/OpenEMSWorkbench/gui/task_panels/port_panel.py
@@ -420,6 +454,7 @@ The most important files for this plan are:
 - freecad/OpenEMSWorkbench/gui/task_panels/simulation_panel.py
 - freecad/OpenEMSWorkbench/validation/preflight.py
 - freecad/OpenEMSWorkbench/execution/__init__.py
+- freecad/OpenEMSWorkbench/execution/runtime_discovery.py
 - tests/unit/test_preflight.py
 - tests/unit/test_exporter_script.py
 - tests/unit/test_exporter_pipeline.py
