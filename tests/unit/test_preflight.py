@@ -29,10 +29,35 @@ class Analysis:
 
 
 class GeoObj:
-    def __init__(self, name):
+    def __init__(self, name, **attrs):
         self.Name = name
         self.Label = name
         self.Shape = object()
+        for key, value in attrs.items():
+            setattr(self, key, value)
+
+
+class BoundBox:
+    def __init__(self, xmin, ymin, zmin, xmax, ymax, zmax):
+        self.XMin = xmin
+        self.YMin = ymin
+        self.ZMin = zmin
+        self.XMax = xmax
+        self.YMax = ymax
+        self.ZMax = zmax
+
+
+class Shape:
+    def __init__(self, bounds):
+        self.BoundBox = BoundBox(*bounds)
+
+
+class MeshStub:
+    def __init__(self, x, y, z):
+        self.coordinate_system = "cartesian"
+        self.x = tuple(x)
+        self.y = tuple(y)
+        self.z = tuple(z)
 
 
 def _minimal_valid_analysis():
@@ -64,6 +89,74 @@ def _minimal_valid_analysis():
     )
     dump = Obj("Dump", "OpenEMS_DumpBox", FrequencySpec="1e9,2e9")
     return Analysis([sim, grid, mat, port, dump])
+
+
+def _minimal_valid_waveguide_analysis():
+    analysis = _minimal_valid_analysis()
+    port = analysis.Group[3]
+    port.PortType = "Waveguide"
+    port.SimulationBoxFace = "ZMin"
+    port.SourcePlaneOffsetCells = 3
+    port.PropagationDirection = "+z"
+
+    inner = GeoObj(
+        "InnerConductor",
+        TypeId="Part::Cylinder",
+        Radius=1.0,
+        Height=10.0,
+        Shape=Shape(bounds=(-1.0, -1.0, 0.0, 1.0, 1.0, 10.0)),
+    )
+    dielectric = GeoObj(
+        "Dielectric",
+        TypeId="Part::FeaturePython",
+        OuterRadius=3.0,
+        InnerRadius=1.0,
+        Height=10.0,
+        Shape=Shape(bounds=(-3.0, -3.0, 0.0, 3.0, 3.0, 10.0)),
+    )
+    outer = GeoObj(
+        "OuterConductor",
+        TypeId="Part::FeaturePython",
+        OuterRadius=4.0,
+        InnerRadius=3.0,
+        Height=10.0,
+        Shape=Shape(bounds=(-4.0, -4.0, 0.0, 4.0, 4.0, 10.0)),
+    )
+
+    sim_box = GeoObj(
+        "OpenEMSSimulationBox",
+        OpenEMSSimulationBox=True,
+        BoundaryXMin="PEC",
+        BoundaryXMax="PEC",
+        BoundaryYMin="PEC",
+        BoundaryYMax="PEC",
+        BoundaryZMin="PEC",
+        BoundaryZMax="PEC",
+    )
+
+    inner_material = Obj(
+        "InnerMaterial",
+        "OpenEMS_Material",
+        AssignedGeometry=[inner],
+        IsPEC=True,
+    )
+    dielectric_material = Obj(
+        "DielectricMaterial",
+        "OpenEMS_Material",
+        AssignedGeometry=[dielectric],
+        EpsilonR=2.1,
+    )
+    outer_material = Obj(
+        "OuterMaterial",
+        "OpenEMS_Material",
+        AssignedGeometry=[outer],
+        IsPEC=True,
+    )
+
+    # Replace the single minimal material with explicit coax assignments.
+    analysis.Group[2] = inner_material
+    analysis.Group.extend([dielectric_material, outer_material, inner, dielectric, outer, sim_box])
+    return analysis
 
 
 def test_preflight_passes_minimal_valid_setup():
@@ -146,14 +239,64 @@ def test_preflight_warns_for_openems_exe_in_script_mode():
     assert any(f.check_id == "simulation.solver_executable_script_mode" for f in findings)
 
 
-def test_preflight_blocks_non_lumped_port_type_in_mvp():
+def test_preflight_blocks_unsupported_port_type_in_mvp():
     from OpenEMSWorkbench.validation.preflight import run_preflight
 
     analysis = _minimal_valid_analysis()
     port = analysis.Group[3]
-    port.PortType = "Waveguide"
+    port.PortType = "PlaneWave"
     findings = run_preflight(analysis)
     assert any(f.check_id == "port.type_supported" for f in findings)
+
+
+def test_preflight_accepts_supported_waveguide_port_configuration():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_waveguide_analysis()
+    findings = run_preflight(analysis)
+    assert not any(f.check_id == "port.waveguide_geometry_supported" for f in findings)
+    assert not any(f.check_id == "port.waveguide_inference_supported" for f in findings)
+    assert not any(f.check_id == "port.waveguide_boundary_type_valid" for f in findings)
+
+
+def test_preflight_rejects_waveguide_when_geometry_not_supported():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_waveguide_analysis()
+    # Keep only one cylinder-like candidate so coax geometry detection is unsupported.
+    analysis.Group = [
+        obj
+        for obj in analysis.Group
+        if getattr(obj, "Name", "") not in {"OuterConductor", "Dielectric"}
+    ]
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "port.waveguide_geometry_supported" for f in findings)
+
+
+def test_preflight_allows_waveguide_on_absorbing_boundary_face():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_waveguide_analysis()
+    sim_box = next(obj for obj in analysis.Group if bool(getattr(obj, "OpenEMSSimulationBox", False)))
+    sim_box.BoundaryZMin = "PML_8"
+
+    findings = run_preflight(analysis)
+    assert not any(f.check_id == "port.waveguide_boundary_defined" for f in findings)
+
+
+def test_preflight_rejects_waveguide_when_source_offset_exceeds_mesh_cells(monkeypatch):
+    from OpenEMSWorkbench.validation import preflight
+
+    analysis = _minimal_valid_waveguide_analysis()
+    port = analysis.Group[3]
+    port.SourcePlaneOffsetCells = 4
+
+    mesh = MeshStub(x=(0.0, 1.0, 2.0), y=(0.0, 1.0, 2.0), z=(0.0, 1.0, 2.0, 3.0, 4.0))
+    monkeypatch.setattr(preflight, "build_mesh_for_analysis", lambda _analysis: (None, None, mesh))
+
+    findings = preflight.run_preflight(analysis)
+    assert any(f.check_id == "port.waveguide_source_plane_offset_safe" for f in findings)
 
 
 def test_preflight_blocks_invalid_excitation_values():

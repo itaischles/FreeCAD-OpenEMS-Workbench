@@ -22,6 +22,11 @@ except ImportError:
         is_supported_delta_unit,
     )
 
+try:
+    from meshing import build_mesh_for_analysis
+except ImportError:
+    from OpenEMSWorkbench.meshing import build_mesh_for_analysis
+
 
 @dataclass
 class PreflightFinding:
@@ -335,20 +340,60 @@ def _check_unit_contract(members) -> list[PreflightFinding]:
     return findings
 
 
-def _check_port_configuration(members) -> list[PreflightFinding]:
+def _check_port_configuration(analysis: Any, members) -> list[PreflightFinding]:
     findings: list[PreflightFinding] = []
     valid_directions = {"x", "y", "z", "+x", "-x", "+y", "-y", "+z", "-z"}
     axis_index = {"x": 0, "y": 1, "z": 2}
+    face_axis_map = {
+        "XMin": "x",
+        "XMax": "x",
+        "YMin": "y",
+        "YMax": "y",
+        "ZMin": "z",
+        "ZMax": "z",
+    }
     excited_count = 0
+
+    extracted = {}
+    extracted_ports_by_name: dict[str, dict[str, Any]] = {}
+    boundary_by_face: dict[str, Any] = {}
+    if any(str(getattr(port, "PortType", "")).strip() == "Waveguide" for port in members.ports):
+        try:
+            try:
+                from exporter.document_reader import read_analysis_for_export
+            except ImportError:
+                from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+            extracted = read_analysis_for_export(analysis)
+            extracted_ports_by_name = {
+                str(item.get("name", "") or ""): item
+                for item in list(extracted.get("ports", []) or [])
+            }
+            boundary_by_face = dict(extracted.get("boundary", {}) or {})
+        except Exception as exc:
+            findings.append(
+                _finding(
+                    "error",
+                    "port.waveguide_export_context",
+                    f"Failed to evaluate waveguide port context: {exc}",
+                )
+            )
+
+    mesh = None
+    if any(str(getattr(port, "PortType", "")).strip() == "Waveguide" for port in members.ports):
+        try:
+            _, _, mesh = build_mesh_for_analysis(analysis)
+        except Exception:
+            mesh = None
 
     for port in members.ports:
         port_type = str(getattr(port, "PortType", "Lumped")).strip()
-        if port_type != "Lumped":
+        if port_type not in {"Lumped", "Waveguide"}:
             findings.append(
                 _finding(
                     "error",
                     "port.type_supported",
-                    f"Port type '{port_type}' is not supported in Phase 9 MVP. Use Lumped.",
+                    f"Port type '{port_type}' is not supported in Phase 9 MVP. Use Lumped or Waveguide.",
                     port,
                 )
             )
@@ -381,45 +426,113 @@ def _check_port_configuration(members) -> list[PreflightFinding]:
         else:
             direction_axis = direction[-1]
 
-        try:
-            sx = float(getattr(port, "PortStartX", 0.0))
-            sy = float(getattr(port, "PortStartY", 0.0))
-            sz = float(getattr(port, "PortStartZ", 0.0))
-            ex = float(getattr(port, "PortStopX", 0.0))
-            ey = float(getattr(port, "PortStopY", 0.0))
-            ez = float(getattr(port, "PortStopZ", 0.0))
-        except Exception:
-            findings.append(
-                _finding(
-                    "error",
-                    "port.region_numeric",
-                    "Port start/stop coordinates must be numeric values.",
-                    port,
+        if port_type == "Lumped":
+            try:
+                sx = float(getattr(port, "PortStartX", 0.0))
+                sy = float(getattr(port, "PortStartY", 0.0))
+                sz = float(getattr(port, "PortStartZ", 0.0))
+                ex = float(getattr(port, "PortStopX", 0.0))
+                ey = float(getattr(port, "PortStopY", 0.0))
+                ez = float(getattr(port, "PortStopZ", 0.0))
+            except Exception:
+                findings.append(
+                    _finding(
+                        "error",
+                        "port.region_numeric",
+                        "Port start/stop coordinates must be numeric values.",
+                        port,
+                    )
                 )
-            )
-            continue
+                continue
 
-        start = [sx, sy, sz]
-        stop = [ex, ey, ez]
-        if sx == ex and sy == ey and sz == ez:
-            findings.append(
-                _finding(
-                    "error",
-                    "port.region_non_degenerate",
-                    "Port start and stop coordinates must define a non-degenerate region.",
-                    port,
+            start = [sx, sy, sz]
+            stop = [ex, ey, ez]
+            if sx == ex and sy == ey and sz == ez:
+                findings.append(
+                    _finding(
+                        "error",
+                        "port.region_non_degenerate",
+                        "Port start and stop coordinates must define a non-degenerate region.",
+                        port,
+                    )
                 )
-            )
 
-        if start[axis_index[direction_axis]] == stop[axis_index[direction_axis]]:
-            findings.append(
-                _finding(
-                    "error",
-                    "port.region_excitation_axis_span",
-                    f"Port start/stop must differ along excitation direction '{direction_axis}'.",
-                    port,
+            if start[axis_index[direction_axis]] == stop[axis_index[direction_axis]]:
+                findings.append(
+                    _finding(
+                        "error",
+                        "port.region_excitation_axis_span",
+                        f"Port start/stop must differ along excitation direction '{direction_axis}'.",
+                        port,
+                    )
                 )
-            )
+
+        if port_type == "Waveguide":
+            selected_face = str(getattr(port, "SimulationBoxFace", "") or "").strip()
+            extracted_port = extracted_ports_by_name.get(str(getattr(port, "Name", "") or ""), {})
+            detection = extracted_port.get("WaveguideFaceGeometry") or {}
+            inference = extracted_port.get("WaveguideCoaxInference") or {}
+
+            if str(detection.get("status", "")) != "supported":
+                reason = str(detection.get("reason", "unknown") or "unknown")
+                findings.append(
+                    _finding(
+                        "error",
+                        "port.waveguide_geometry_supported",
+                        f"Waveguide port requires supported coax geometry on face '{selected_face}' ({reason}).",
+                        port,
+                    )
+                )
+
+            if str(inference.get("status", "")) != "supported":
+                reason = str(inference.get("reason", "unknown") or "unknown")
+                findings.append(
+                    _finding(
+                        "error",
+                        "port.waveguide_inference_supported",
+                        f"Waveguide coax inference failed for face '{selected_face}' ({reason}).",
+                        port,
+                    )
+                )
+
+            face_boundary = str(boundary_by_face.get(selected_face, "") or "").strip()
+            if not face_boundary:
+                findings.append(
+                    _finding(
+                        "error",
+                        "port.waveguide_boundary_defined",
+                        f"Waveguide port face '{selected_face}' must have an explicit simulation-box boundary type.",
+                        port,
+                    )
+                )
+
+            offset_cells = int(getattr(port, "SourcePlaneOffsetCells", 0) or 0)
+            if offset_cells < 2 or offset_cells > 9:
+                findings.append(
+                    _finding(
+                        "error",
+                        "port.waveguide_source_plane_offset_range",
+                        "Waveguide source-plane offset must be between 2 and 9 mesh cells.",
+                        port,
+                    )
+                )
+
+            axis_name = face_axis_map.get(selected_face)
+            axis_values = tuple(getattr(mesh, axis_name, ()) or ()) if mesh is not None and axis_name else ()
+            if axis_name and len(axis_values) >= 2:
+                max_safe_offset = len(axis_values) - 2
+                if offset_cells > max_safe_offset:
+                    findings.append(
+                        _finding(
+                            "error",
+                            "port.waveguide_source_plane_offset_safe",
+                            (
+                                f"Waveguide source-plane offset {offset_cells} cells is too large for face '{selected_face}'. "
+                                f"Maximum safe offset for current mesh is {max_safe_offset} cells."
+                            ),
+                            port,
+                        )
+                    )
 
         if bool(getattr(port, "Excite", False)):
             excited_count += 1
@@ -536,7 +649,7 @@ def run_preflight(analysis: Any) -> list[PreflightFinding]:
     findings.extend(_check_solver_configuration(members))
     findings.extend(_check_unit_contract(members))
     findings.extend(_check_excitation(members))
-    findings.extend(_check_port_configuration(members))
+    findings.extend(_check_port_configuration(analysis, members))
     findings.extend(_check_material_assignments(analysis, members))
 
     for unknown in members.unknown:
