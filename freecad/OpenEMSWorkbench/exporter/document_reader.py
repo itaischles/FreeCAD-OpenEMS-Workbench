@@ -21,6 +21,16 @@ except ImportError:
     from OpenEMSWorkbench.validation.member_collection import collect_members
 
 try:
+    from exporter.port_geometry import detect_waveguide_face_geometry
+except ImportError:
+    from OpenEMSWorkbench.exporter.port_geometry import detect_waveguide_face_geometry
+
+try:
+    from exporter.port_inference import infer_coax_from_waveguide_detection
+except ImportError:
+    from OpenEMSWorkbench.exporter.port_inference import infer_coax_from_waveguide_detection
+
+try:
     from utils.unit_contract import (
         DEFAULT_LENGTH_UNIT_NAME,
         canonical_delta_unit_meters,
@@ -440,6 +450,29 @@ def _linked_object_names(value) -> list[str]:
     return sorted(set(names))
 
 
+def _material_names_by_geometry(material_entries: list[dict]) -> dict[str, list[str]]:
+    mapping: dict[str, set[str]] = {}
+    for material in material_entries:
+        material_name = str(material.get("name", "") or "").strip()
+        if not material_name:
+            continue
+        for geometry_name in material.get("AssignedGeometryNames", []):
+            key = str(geometry_name or "").strip()
+            if not key:
+                continue
+            mapping.setdefault(key, set()).add(material_name)
+    return {key: sorted(value) for key, value in mapping.items()}
+
+
+def _materials_by_name(material_entries: list[dict]) -> dict[str, dict]:
+    result: dict[str, dict] = {}
+    for material in material_entries:
+        name = str(material.get("name", "") or "").strip()
+        if name:
+            result[name] = material
+    return result
+
+
 def _material_to_dict(material) -> dict:
     data = _object_to_dict(material, ["EpsilonR", "MuR", "Kappa", "IsPEC", "AssignmentPriority"])
     data["AssignmentPriority"] = int(data.get("AssignmentPriority", 0) or 0)
@@ -476,6 +509,8 @@ def read_analysis_for_export(analysis) -> dict:
     material_assignments.sort(
         key=lambda item: (item["geometry_name"], item["material_name"])
     )
+    geometry_to_materials = _material_names_by_geometry(material_entries)
+    materials_by_name = _materials_by_name(material_entries)
 
     simulation_data = (
         _object_to_dict(
@@ -508,6 +543,40 @@ def read_analysis_for_export(analysis) -> dict:
         )
         simulation_data["FreeCADLengthUnitName"] = DEFAULT_LENGTH_UNIT_NAME
 
+    ports = []
+    for p in sorted(members.ports, key=lambda item: int(getattr(item, "PortNumber", 0))):
+        port_data = _object_to_dict(
+            p,
+            [
+                "PortType",
+                "PortNumber",
+                "Resistance",
+                "Excite",
+                "SimulationBoxFace",
+                "SourcePlaneOffsetCells",
+                "PropagationDirection",
+                "PortStartX",
+                "PortStartY",
+                "PortStartZ",
+                "PortStopX",
+                "PortStopY",
+                "PortStopZ",
+            ],
+        )
+        if str(port_data.get("PortType", "")).strip() == "Waveguide":
+            waveguide_face_geometry = detect_waveguide_face_geometry(
+                geometry_objects=geometry_objects,
+                simulation_box=simulation_box,
+                selected_face=str(port_data.get("SimulationBoxFace", "") or ""),
+                material_names_by_geometry=geometry_to_materials,
+            )
+            port_data["WaveguideFaceGeometry"] = waveguide_face_geometry
+            port_data["WaveguideCoaxInference"] = infer_coax_from_waveguide_detection(
+                detection=waveguide_face_geometry,
+                materials_by_name=materials_by_name,
+            )
+        ports.append(port_data)
+
     return {
         "analysis_name": str(getattr(analysis, "Name", "analysis")),
         "simulation": simulation_data,
@@ -528,25 +597,7 @@ def read_analysis_for_export(analysis) -> dict:
         "boundary": boundary,
         "materials": material_entries,
         "material_assignments": material_assignments,
-        "ports": [
-            _object_to_dict(
-                p,
-                [
-                    "PortType",
-                    "PortNumber",
-                    "Resistance",
-                    "Excite",
-                    "PropagationDirection",
-                    "PortStartX",
-                    "PortStartY",
-                    "PortStartZ",
-                    "PortStopX",
-                    "PortStopY",
-                    "PortStopZ",
-                ],
-            )
-            for p in sorted(members.ports, key=lambda item: int(getattr(item, "PortNumber", 0)))
-        ],
+        "ports": ports,
         "dumpboxes": [
             _object_to_dict(d, ["DumpType", "Enabled", "FrequencySpec"]) for d in members.dumpboxes
         ],

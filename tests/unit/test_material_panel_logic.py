@@ -43,7 +43,7 @@ def test_filter_assignable_selection_only_keeps_analysis_geometry():
     analysis = Analysis([geo_a])
 
     result = _filter_assignable_selection([geo_a, geo_b, not_geo], analysis)
-    assert result == [geo_a]
+    assert result == [geo_a, geo_b]
 
 
 def test_merge_unique_by_name_keeps_existing_order_and_skips_duplicates():

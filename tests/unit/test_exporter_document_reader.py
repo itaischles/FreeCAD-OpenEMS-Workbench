@@ -41,8 +41,23 @@ class _BoundBox:
 
 
 class _ShapeWithBoundBox:
-    def __init__(self, bb):
+    def __init__(self, bb, faces=None):
         self.BoundBox = bb
+        self.Faces = list(faces or [])
+
+
+class _CylinderSurface:
+    def __init__(self, axis_name="z"):
+        self.Axis = type("Axis", (), {
+            "x": 1.0 if axis_name == "x" else 0.0,
+            "y": 1.0 if axis_name == "y" else 0.0,
+            "z": 1.0 if axis_name == "z" else 0.0,
+        })()
+
+
+class _CylinderFace:
+    def __init__(self, axis_name="z"):
+        self.Surface = _CylinderSurface(axis_name=axis_name)
 
 
 class GeoObjWithBounds:
@@ -50,6 +65,51 @@ class GeoObjWithBounds:
         self.Name = name
         self.Label = name
         self.Shape = _ShapeWithBoundBox(_BoundBox(xmin, ymin, zmin, xmax, ymax, zmax))
+
+
+class CylinderObjWithBounds(GeoObjWithBounds):
+    def __init__(self, name, xmin, ymin, zmin, xmax, ymax, zmax, radius=1.0, height=1.0):
+        super().__init__(name, xmin, ymin, zmin, xmax, ymax, zmax)
+        self.Radius = radius
+        self.Height = height
+
+
+class BodyLikeCylinderObj(GeoObjWithBounds):
+    def __init__(self, name, xmin, ymin, zmin, xmax, ymax, zmax, axis_name="z"):
+        self.Name = name
+        self.Label = name
+        self.Shape = _ShapeWithBoundBox(
+            _BoundBox(xmin, ymin, zmin, xmax, ymax, zmax),
+            faces=[_CylinderFace(axis_name=axis_name)],
+        )
+
+
+class TubeObjWithBounds(GeoObjWithBounds):
+    def __init__(self, name, xmin, ymin, zmin, xmax, ymax, zmax, inner_radius, outer_radius):
+        super().__init__(name, xmin, ymin, zmin, xmax, ymax, zmax)
+        self.InnerRadius = inner_radius
+        self.OuterRadius = outer_radius
+        self.Height = zmax - zmin
+
+
+class GroupedGeometryObj:
+    def __init__(self, name, children, xmin, ymin, zmin, xmax, ymax, zmax):
+        self.Name = name
+        self.Label = name
+        self.Group = list(children)
+        self.Shape = _ShapeWithBoundBox(_BoundBox(xmin, ymin, zmin, xmax, ymax, zmax))
+
+
+class _PlacementBase:
+    def __init__(self, x=0.0, y=0.0, z=0.0):
+        self.x = x
+        self.y = y
+        self.z = z
+
+
+class _Placement:
+    def __init__(self, x=0.0, y=0.0, z=0.0):
+        self.Base = _PlacementBase(x=x, y=y, z=z)
 
 
 class Analysis:
@@ -411,5 +471,492 @@ def test_document_reader_normalizes_delta_unit_to_unit_contract():
     extracted = read_analysis_for_export(analysis)
     assert extracted["simulation"]["DeltaUnit"] == 1e-3
     assert extracted["simulation"]["FreeCADLengthUnitName"] == "mm"
+
+
+def test_document_reader_detects_supported_waveguide_face_coax_geometry():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    # Two concentric cylinders crossing the ZMin simulation-box face (z=0).
+    inner = CylinderObjWithBounds("InnerPin", 4.0, 4.0, 0.0, 6.0, 6.0, 8.0, radius=1.0, height=8.0)
+    dielectric = CylinderObjWithBounds("Dielectric", 3.4, 3.4, 0.0, 6.6, 6.6, 8.0, radius=1.6, height=8.0)
+    outer = CylinderObjWithBounds("OuterShield", 3.0, 3.0, 0.0, 7.0, 7.0, 8.0, radius=2.0, height=8.0)
+
+    inner_mat = OpenEMSObj(
+        "MatInner",
+        "OpenEMS_Material",
+        EpsilonR=1.0,
+        MuR=1.0,
+        Kappa=0.0,
+        IsPEC=True,
+        AssignmentPriority=1,
+        AssignedGeometry=[inner],
+    )
+    dielectric_mat = OpenEMSObj(
+        "MatDielectric",
+        "OpenEMS_Material",
+        EpsilonR=2.2,
+        MuR=1.0,
+        Kappa=0.0,
+        IsPEC=False,
+        AssignmentPriority=1,
+        AssignedGeometry=[dielectric],
+    )
+    outer_mat = OpenEMSObj(
+        "MatOuter",
+        "OpenEMS_Material",
+        EpsilonR=1.0,
+        MuR=1.0,
+        Kappa=0.0,
+        IsPEC=True,
+        AssignmentPriority=1,
+        AssignedGeometry=[outer],
+    )
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.0),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            inner_mat,
+            dielectric_mat,
+            outer_mat,
+            OpenEMSObj(
+                "Port1",
+                "OpenEMS_Port",
+                PortType="Waveguide",
+                PortNumber=1,
+                SimulationBoxFace="ZMin",
+                SourcePlaneOffsetCells=3,
+            ),
+            inner,
+            dielectric,
+            outer,
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    port = extracted["ports"][0]
+
+    detected = port.get("WaveguideFaceGeometry")
+    assert detected is not None
+    assert detected["status"] == "supported"
+    assert detected["kind"] == "coax_axis_aligned"
+    assert detected["selected_face"] == "ZMin"
+    assert detected["axis"] == "z"
+    assert detected["inner"]["geometry_name"] == "InnerPin"
+    assert detected["outer"]["geometry_name"] == "OuterShield"
+
+    inferred = port.get("WaveguideCoaxInference")
+    assert inferred is not None
+    assert inferred["status"] == "supported"
+    assert inferred["axis"] == "z"
+    assert inferred["r_in"] == 1.0
+    assert inferred["r_out"] == 2.0
+    assert inferred["dielectric_epsilon_r"] == 2.2
+    assert inferred["inner_conductor_geometry"] == "InnerPin"
+    assert inferred["outer_conductor_geometry"] == "OuterShield"
+    assert inferred["dielectric_material_name"] == "MatDielectric"
+
+
+def test_document_reader_reports_unsupported_waveguide_face_geometry_when_not_enough_candidates():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    only_one = CylinderObjWithBounds("OnlyOne", 4.0, 4.0, 0.0, 6.0, 6.0, 8.0, radius=1.0, height=8.0)
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.0),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            OpenEMSObj(
+                "Port1",
+                "OpenEMS_Port",
+                PortType="Waveguide",
+                PortNumber=1,
+                SimulationBoxFace="ZMin",
+                SourcePlaneOffsetCells=3,
+            ),
+            only_one,
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    port = extracted["ports"][0]
+
+    detected = port.get("WaveguideFaceGeometry")
+    assert detected is not None
+    assert detected["status"] == "unsupported"
+    assert detected["reason"] == "insufficient_cylinder_candidates"
+
+    inferred = port.get("WaveguideCoaxInference")
+    assert inferred is not None
+    assert inferred["status"] == "unsupported"
+    assert inferred["reason"] == "geometry_detection_not_supported"
+
+
+def test_document_reader_reports_unsupported_waveguide_inference_without_dielectric_material():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    inner = CylinderObjWithBounds("InnerPin", 4.0, 4.0, 0.0, 6.0, 6.0, 8.0, radius=1.0, height=8.0)
+    outer = CylinderObjWithBounds("OuterShield", 3.0, 3.0, 0.0, 7.0, 7.0, 8.0, radius=2.0, height=8.0)
+
+    inner_mat = OpenEMSObj(
+        "MatInner",
+        "OpenEMS_Material",
+        EpsilonR=1.0,
+        MuR=1.0,
+        Kappa=0.0,
+        IsPEC=True,
+        AssignmentPriority=1,
+        AssignedGeometry=[inner],
+    )
+    outer_mat = OpenEMSObj(
+        "MatOuter",
+        "OpenEMS_Material",
+        EpsilonR=1.0,
+        MuR=1.0,
+        Kappa=0.0,
+        IsPEC=True,
+        AssignmentPriority=1,
+        AssignedGeometry=[outer],
+    )
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.0),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            inner_mat,
+            outer_mat,
+            OpenEMSObj(
+                "Port1",
+                "OpenEMS_Port",
+                PortType="Waveguide",
+                PortNumber=1,
+                SimulationBoxFace="ZMin",
+                SourcePlaneOffsetCells=3,
+            ),
+            inner,
+            outer,
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    inferred = extracted["ports"][0].get("WaveguideCoaxInference")
+    assert inferred is not None
+    assert inferred["status"] == "unsupported"
+    assert inferred["reason"] == "dielectric_material_not_found"
+
+
+def test_document_reader_detects_body_like_cylindrical_geometry_on_selected_face():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    inner = BodyLikeCylinderObj("InnerPinBody", 4.0, 4.0, 0.0, 6.0, 6.0, 8.0, axis_name="z")
+    outer = BodyLikeCylinderObj("OuterShieldBody", 3.0, 3.0, 0.0, 7.0, 7.0, 8.0, axis_name="z")
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.0),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            OpenEMSObj(
+                "Port1",
+                "OpenEMS_Port",
+                PortType="Waveguide",
+                PortNumber=1,
+                SimulationBoxFace="ZMin",
+                SourcePlaneOffsetCells=3,
+            ),
+            inner,
+            outer,
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    detected = extracted["ports"][0].get("WaveguideFaceGeometry")
+
+    assert detected is not None
+    assert detected["status"] == "supported"
+    assert detected["inner"]["geometry_name"] == "InnerPinBody"
+    assert detected["outer"]["geometry_name"] == "OuterShieldBody"
+
+
+def test_document_reader_detects_waveguide_geometry_inside_grouped_part_object():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    inner = BodyLikeCylinderObj("InnerPin", 4.0, 4.0, 0.0, 6.0, 6.0, 8.0, axis_name="z")
+    dielectric = BodyLikeCylinderObj("DielectricTube", 3.5, 3.5, 0.0, 6.5, 6.5, 8.0, axis_name="z")
+    outer = BodyLikeCylinderObj("OuterTube", 3.0, 3.0, 0.0, 7.0, 7.0, 8.0, axis_name="z")
+    grouped_part = GroupedGeometryObj("CoaxAssembly", [outer, dielectric, inner], 3.0, 3.0, 0.0, 7.0, 7.0, 8.0)
+
+    inner_material = OpenEMSObj(
+        "InnerCond",
+        "OpenEMS_Material",
+        IsPEC=True,
+        AssignedGeometry=[inner],
+    )
+    dielectric_material = OpenEMSObj(
+        "Dielectric",
+        "OpenEMS_Material",
+        EpsilonR=2.1,
+        AssignedGeometry=[dielectric],
+    )
+    outer_material = OpenEMSObj(
+        "OuterCond",
+        "OpenEMS_Material",
+        IsPEC=True,
+        AssignedGeometry=[outer],
+    )
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.0),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            inner_material,
+            dielectric_material,
+            outer_material,
+            OpenEMSObj(
+                "Port1",
+                "OpenEMS_Port",
+                PortType="Waveguide",
+                PortNumber=1,
+                SimulationBoxFace="ZMin",
+                SourcePlaneOffsetCells=3,
+            ),
+            grouped_part,
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    detected = extracted["ports"][0].get("WaveguideFaceGeometry")
+    inferred = extracted["ports"][0].get("WaveguideCoaxInference")
+
+    assert detected is not None
+    assert detected["status"] == "supported"
+    assert detected["inner"]["geometry_name"] == "InnerPin"
+    assert detected["outer"]["geometry_name"] == "OuterTube"
+    assert inferred is not None
+    assert inferred["status"] == "supported"
+
+
+def test_document_reader_detects_grouped_waveguide_geometry_with_part_placement_offset():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    inner = BodyLikeCylinderObj("InnerPinShifted", -1.0, -1.0, 0.0, 1.0, 1.0, 8.0, axis_name="z")
+    dielectric = BodyLikeCylinderObj("DielectricShifted", -1.5, -1.5, 0.0, 1.5, 1.5, 8.0, axis_name="z")
+    outer = BodyLikeCylinderObj("OuterTubeShifted", -2.0, -2.0, 0.0, 2.0, 2.0, 8.0, axis_name="z")
+    grouped_part = GroupedGeometryObj("ShiftedCoaxAssembly", [outer, dielectric, inner], 8.0, 8.0, 0.0, 12.0, 12.0, 8.0)
+    grouped_part.Placement = _Placement(x=10.0, y=10.0, z=0.0)
+
+    inner_material = OpenEMSObj(
+        "InnerCondShifted",
+        "OpenEMS_Material",
+        IsPEC=True,
+        AssignedGeometry=[inner],
+    )
+    dielectric_material = OpenEMSObj(
+        "DielectricShiftedMat",
+        "OpenEMS_Material",
+        EpsilonR=2.1,
+        AssignedGeometry=[dielectric],
+    )
+    outer_material = OpenEMSObj(
+        "OuterCondShifted",
+        "OpenEMS_Material",
+        IsPEC=True,
+        AssignedGeometry=[outer],
+    )
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.0),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            inner_material,
+            dielectric_material,
+            outer_material,
+            OpenEMSObj(
+                "Port1",
+                "OpenEMS_Port",
+                PortType="Waveguide",
+                PortNumber=1,
+                SimulationBoxFace="ZMin",
+                SourcePlaneOffsetCells=3,
+            ),
+            grouped_part,
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    detected = extracted["ports"][0].get("WaveguideFaceGeometry")
+
+    assert detected is not None
+    assert detected["status"] == "supported"
+    assert detected["inner"]["geometry_name"] == "InnerPinShifted"
+    assert detected["outer"]["geometry_name"] == "OuterTubeShifted"
+
+
+def test_document_reader_prefers_tube_and_cylinder_radius_properties_for_cut_solids():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    inner = CylinderObjWithBounds("InnerPin", 4.1, 4.1, 0.0, 5.9, 5.9, 8.0, radius=1.0, height=8.0)
+    dielectric = TubeObjWithBounds("DielectricTube", 3.3, 3.3, 0.0, 6.7, 6.7, 8.0, inner_radius=1.0, outer_radius=1.6)
+    outer = TubeObjWithBounds("OuterTube", 2.8, 2.8, 0.0, 7.2, 7.2, 8.0, inner_radius=1.6, outer_radius=2.0)
+
+    inner_mat = OpenEMSObj(
+        "MatInner",
+        "OpenEMS_Material",
+        EpsilonR=1.0,
+        MuR=1.0,
+        Kappa=0.0,
+        IsPEC=True,
+        AssignmentPriority=1,
+        AssignedGeometry=[inner],
+    )
+    dielectric_mat = OpenEMSObj(
+        "MatDielectric",
+        "OpenEMS_Material",
+        EpsilonR=2.2,
+        MuR=1.0,
+        Kappa=0.0,
+        IsPEC=False,
+        AssignmentPriority=1,
+        AssignedGeometry=[dielectric],
+    )
+    outer_mat = OpenEMSObj(
+        "MatOuter",
+        "OpenEMS_Material",
+        EpsilonR=1.0,
+        MuR=1.0,
+        Kappa=0.0,
+        IsPEC=True,
+        AssignmentPriority=1,
+        AssignedGeometry=[outer],
+    )
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.0),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            inner_mat,
+            dielectric_mat,
+            outer_mat,
+            OpenEMSObj(
+                "Port1",
+                "OpenEMS_Port",
+                PortType="Waveguide",
+                PortNumber=1,
+                SimulationBoxFace="ZMin",
+                SourcePlaneOffsetCells=3,
+            ),
+            inner,
+            dielectric,
+            outer,
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    port = extracted["ports"][0]
+    detected = port.get("WaveguideFaceGeometry")
+    inferred = port.get("WaveguideCoaxInference")
+
+    assert detected is not None
+    assert detected["status"] == "supported"
+    assert detected["inner"]["radius"] == 1.0
+    assert detected["inner"]["radius_source"] == "cylinder_properties"
+    assert detected["outer"]["radius"] == 2.0
+    assert detected["outer"]["radius_source"] == "tube_properties"
+    assert inferred is not None
+    assert inferred["status"] == "supported"
+    assert inferred["r_in"] == 1.0
+    assert inferred["r_out"] == 2.0
+
+
+def test_document_reader_detects_cut_solids_with_slightly_uneven_circular_bounds():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    inner = CylinderObjWithBounds(
+        "Cylinder",
+        -9.954719225730846,
+        -9.988673391830078,
+        0.0,
+        10.0,
+        9.98867339183008,
+        100.0,
+        radius=10.0,
+        height=100.0,
+    )
+    outer = TubeObjWithBounds(
+        "Tube",
+        -54.89568308053743,
+        -54.973914584235125,
+        0.0,
+        55.0,
+        54.973914584235125,
+        100.0,
+        inner_radius=10.0,
+        outer_radius=55.0,
+    )
+    dielectric = TubeObjWithBounds(
+        "Tube001",
+        -50.0,
+        -49.90133642141359,
+        0.0,
+        50.0,
+        49.901336421413575,
+        100.0,
+        inner_radius=10.0,
+        outer_radius=50.0,
+    )
+
+    inner_mat = OpenEMSObj(
+        "MatInner",
+        "OpenEMS_Material",
+        IsPEC=True,
+        AssignedGeometry=[inner],
+    )
+    dielectric_mat = OpenEMSObj(
+        "MatDielectric",
+        "OpenEMS_Material",
+        EpsilonR=2.2,
+        AssignedGeometry=[dielectric],
+    )
+    outer_mat = OpenEMSObj(
+        "MatOuter",
+        "OpenEMS_Material",
+        IsPEC=True,
+        AssignedGeometry=[outer],
+    )
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation", SimulationBoxMargin=0.0),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            inner_mat,
+            dielectric_mat,
+            outer_mat,
+            OpenEMSObj(
+                "Port1",
+                "OpenEMS_Port",
+                PortType="Waveguide",
+                PortNumber=1,
+                SimulationBoxFace="ZMin",
+                SourcePlaneOffsetCells=3,
+            ),
+            inner,
+            dielectric,
+            outer,
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    port = extracted["ports"][0]
+    detected = port.get("WaveguideFaceGeometry")
+    inferred = port.get("WaveguideCoaxInference")
+
+    assert detected is not None
+    assert detected["status"] == "supported"
+    assert detected["axis"] == "z"
+    assert detected["inner"]["geometry_name"] == "Cylinder"
+    assert detected["outer"]["geometry_name"] == "Tube"
+    assert inferred is not None
+    assert inferred["status"] == "supported"
+    assert inferred["r_in"] == 10.0
+    assert inferred["r_out"] == 55.0
 
 

@@ -3,6 +3,7 @@
 COORDINATE_SYSTEMS = ["Cartesian", "Cylindrical"]
 BOUNDARY_TYPES = ["PML_8", "MUR", "PEC", "PMC"]
 PORT_TYPES = ["Lumped", "Waveguide", "PlaneWave"]
+SIMULATION_BOX_FACE_CHOICES = ["XMin", "XMax", "YMin", "YMax", "ZMin", "ZMax"]
 DUMP_TYPES = ["EField", "HField", "NF2FF"]
 EXCITATION_TYPES = ["Gaussian", "Sinusoid"]
 
@@ -40,6 +41,8 @@ DEFAULTS = {
 		"port_number": 1,
 		"resistance": 50.0,
 		"excite": True,
+		"simulation_box_face": "ZMin",
+		"source_plane_offset_cells": 3,
 		"propagation_direction": "+z",
 		"start_x": 0.0,
 		"start_y": 0.0,

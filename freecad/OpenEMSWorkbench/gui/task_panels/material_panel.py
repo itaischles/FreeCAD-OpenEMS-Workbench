@@ -60,11 +60,8 @@ def _merge_unique_by_name(existing: list[Any], incoming: list[Any]) -> list[Any]
 
 def _filter_assignable_selection(selection: list[Any], analysis: Any | None) -> list[Any]:
     filtered = []
-    analysis_group = list(getattr(analysis, "Group", [])) if analysis is not None else []
     for obj in selection:
         if not _is_geometry_object(obj):
-            continue
-        if analysis is not None and obj not in analysis_group:
             continue
         filtered.append(obj)
     return filtered
@@ -146,7 +143,15 @@ class MaterialTaskPanel(BaseObjectTaskPanel):
         except ImportError:  # pragma: no cover - runtime only in FreeCAD GUI
             return []
 
-        return list(Gui.Selection.getSelection())
+        selected = list(Gui.Selection.getSelection())
+        # When users click faces/solids in the 3D view, FreeCAD may carry the
+        # owning object through SelectionEx only; include those owners as well.
+        for item in list(Gui.Selection.getSelectionEx()):
+            obj = getattr(item, "Object", None)
+            if obj is None or obj in selected:
+                continue
+            selected.append(obj)
+        return selected
 
     def _assigned_geometry(self) -> list[Any]:
         value = getattr(self.obj, "AssignedGeometry", [])
