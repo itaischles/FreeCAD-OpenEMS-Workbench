@@ -19,6 +19,10 @@ class _Obj:
         self.Proxy = _Proxy(proxy_type)
 
 
+class _SimulationBoxObj:
+    OpenEMSSimulationBox = True
+
+
 def test_registry_resolves_known_proxy_types():
     from OpenEMSWorkbench.gui.task_panels.panel_registry import get_panel_class_for_object
 
@@ -39,3 +43,9 @@ def test_registry_returns_none_for_unknown_proxy_type():
     from OpenEMSWorkbench.gui.task_panels.panel_registry import get_panel_class_for_object
 
     assert get_panel_class_for_object(_Obj("Unknown_Type")) is None
+
+
+def test_registry_resolves_simulation_box_marker_object():
+    from OpenEMSWorkbench.gui.task_panels.panel_registry import get_panel_class_for_object
+
+    assert get_panel_class_for_object(_SimulationBoxObj()) is not None

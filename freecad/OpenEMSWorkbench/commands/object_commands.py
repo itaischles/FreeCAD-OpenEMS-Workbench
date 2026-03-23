@@ -408,8 +408,10 @@ class _EditSelectedObjectCommand:
         selected = selection[0]
         proxy = getattr(selected, "Proxy", None)
         proxy_type = getattr(proxy, "TYPE", "")
-        if not str(proxy_type).startswith("OpenEMS_"):
-            App.Console.PrintError("OpenEMS: Selected object is not an OpenEMS object.\n")
+        is_openems_proxy_object = str(proxy_type).startswith("OpenEMS_")
+        is_simulation_box = _is_simulation_box_object(selected)
+        if not is_openems_proxy_object and not is_simulation_box:
+            App.Console.PrintError("OpenEMS: Selected object is not editable by OpenEMS task panels.\n")
             return
 
         try:
