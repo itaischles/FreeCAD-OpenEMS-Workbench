@@ -90,3 +90,19 @@ def test_analysis_proxy_skips_refresh_when_group_refresh_is_suppressed(monkeypat
     proxy.onChanged(analysis, "Group")
 
     assert calls == []
+
+
+def test_analysis_viewprovider_claims_group_children_for_tree_nesting():
+    from OpenEMSWorkbench.objects.analysis_feature import OpenEMSAnalysisViewProvider
+
+    child_a = object()
+    child_b = object()
+
+    class _ViewObjectStub:
+        def __init__(self):
+            self.Object = type("Analysis", (), {"Group": [child_a, child_b]})()
+
+    viewprovider = OpenEMSAnalysisViewProvider()
+    viewprovider.attach(_ViewObjectStub())
+
+    assert viewprovider.claimChildren() == [child_a, child_b]

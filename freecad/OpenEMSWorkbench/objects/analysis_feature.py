@@ -55,3 +55,9 @@ class OpenEMSAnalysisProxy(FeatureProxyBase):
 
 class OpenEMSAnalysisViewProvider(ViewProviderBase):
     TYPE = "OpenEMS_AnalysisView"
+
+    def claimChildren(self):  # noqa: N802 - FreeCAD API
+        obj = getattr(self, "Object", None)
+        if obj is None:
+            return []
+        return list(getattr(obj, "Group", []))
