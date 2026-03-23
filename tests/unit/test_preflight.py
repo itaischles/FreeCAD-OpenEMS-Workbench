@@ -600,3 +600,27 @@ def test_preflight_accepts_stl_fallback_when_runtime_has_reader(monkeypatch):
 
     assert not any(f.check_id == "simulation.stl_reader_required" for f in findings)
     assert not any(f.check_id == "simulation.stl_reader_runtime_unchecked" for f in findings)
+
+
+def test_preflight_does_not_report_geometry_as_unknown_member_info():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    geometry = GeoObj("GeoA")
+    analysis.Group.append(geometry)
+
+    material = analysis.Group[2]
+    material.AssignedGeometry = [geometry]
+
+    findings = run_preflight(analysis)
+    assert not any(f.check_id == "analysis.unknown_member" for f in findings)
+
+
+def test_preflight_keeps_unknown_member_info_for_non_geometry_objects():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    analysis.Group.append(Obj("LegacyHelper", "Legacy_Helper"))
+
+    findings = run_preflight(analysis)
+    assert any(f.check_id == "analysis.unknown_member" for f in findings)

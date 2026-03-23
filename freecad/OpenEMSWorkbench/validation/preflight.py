@@ -1039,6 +1039,12 @@ def run_preflight(analysis: Any) -> list[PreflightFinding]:
     findings.extend(_check_material_assignments(analysis, members))
 
     for unknown in members.unknown:
+        # User geometry can live directly in the analysis group and should not
+        # be reported as an unknown analysis member.
+        if bool(getattr(unknown, "OpenEMSSimulationBox", False)):
+            continue
+        if hasattr(unknown, "Shape"):
+            continue
         findings.append(
             _finding(
                 "info",
