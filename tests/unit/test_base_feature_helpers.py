@@ -73,3 +73,12 @@ def test_viewprovider_attach_sets_proxy():
     vp = ViewProviderBase()
     vp.attach(view)
     assert view.Proxy is vp
+
+
+def test_viewprovider_base_reports_default_display_mode():
+    from OpenEMSWorkbench.objects.base_feature import ViewProviderBase
+
+    vp = ViewProviderBase()
+
+    assert vp.getDisplayModes(object()) == ["Default"]
+    assert vp.getDefaultDisplayMode() == "Default"

@@ -50,6 +50,22 @@ class ViewProviderBase:
     def attach(self, vobj: Any) -> None:
         vobj.Proxy = self
         self.Object = getattr(vobj, "Object", None)
+        self._ensure_default_display_mode(vobj)
+
+    def _ensure_default_display_mode(self, vobj: Any) -> None:
+        if not hasattr(vobj, "addDisplayMode"):
+            return
+        try:
+            from pivy import coin
+        except Exception:
+            return
+
+        try:
+            root = coin.SoGroup()
+            vobj.addDisplayMode(root, "Default")
+            self._default_display_root = root
+        except Exception:
+            return
 
     def setEdit(self, vobj: Any, mode: int = 0) -> bool:  # noqa: N802 - FreeCAD API
         _ = mode
@@ -105,10 +121,10 @@ class ViewProviderBase:
 
     def getDisplayModes(self, obj: Any) -> list[str]:  # noqa: N802 - FreeCAD API
         _ = obj
-        return []
+        return ["Default"]
 
     def getDefaultDisplayMode(self) -> str:  # noqa: N802 - FreeCAD API
-        return "Flat Lines"
+        return "Default"
 
     def setDisplayMode(self, mode: str) -> str:  # noqa: N802 - FreeCAD API
         return mode
