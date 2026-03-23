@@ -156,6 +156,35 @@ class SimBoxObj:
         }
 
 
+def test_document_reader_normalizes_dumpbox_for_time_domain_plane_export():
+    from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
+
+    analysis = Analysis(
+        [
+            OpenEMSObj("Sim", "OpenEMS_Simulation"),
+            OpenEMSObj("Grid", "OpenEMS_Grid"),
+            OpenEMSObj("Mat", "OpenEMS_Material"),
+            OpenEMSObj(
+                "Dump1",
+                "OpenEMS_DumpBox",
+                DumpType="EField",
+                DumpMode="TimeDomain",
+                PlaneAxis="Y",
+                Enabled=True,
+            ),
+        ]
+    )
+
+    extracted = read_analysis_for_export(analysis)
+    assert len(extracted["dumpboxes"]) == 1
+
+    dump = extracted["dumpboxes"][0]
+    assert dump["DumpType"] == "EField"
+    assert dump["DumpMode"] == "TimeDomain"
+    assert dump["PlaneAxis"] == "Y"
+    assert dump["Enabled"] is True
+
+
 def test_document_reader_emits_material_assignment_metadata():
     from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
 

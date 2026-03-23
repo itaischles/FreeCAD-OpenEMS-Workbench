@@ -99,7 +99,7 @@ def _minimal_valid_analysis():
         PortStopY=0.0,
         PortStopZ=1.0,
     )
-    dump = Obj("Dump", "OpenEMS_DumpBox", FrequencySpec="1e9,2e9")
+    dump = Obj("Dump", "OpenEMS_DumpBox", DumpType="EField", DumpMode="TimeDomain", PlaneAxis="Z")
     return Analysis([sim, grid, mat, port, dump])
 
 
@@ -249,6 +249,22 @@ def test_preflight_warns_for_openems_exe_in_script_mode():
     simulation.SolverExecutable = "C:/tools/openEMS.exe"
     findings = run_preflight(analysis)
     assert any(f.check_id == "simulation.solver_executable_script_mode" for f in findings)
+
+
+def test_preflight_validates_dumpbox_mvp_constraints():
+    from OpenEMSWorkbench.validation.preflight import run_preflight
+
+    analysis = _minimal_valid_analysis()
+    dump = analysis.Group[4]
+    dump.DumpType = "HField"
+    dump.DumpMode = "FrequencyDomain"
+    dump.PlaneAxis = "Q"
+
+    findings = run_preflight(analysis)
+
+    assert any(f.check_id == "dumpbox.dump_type_supported" for f in findings)
+    assert any(f.check_id == "dumpbox.dump_mode_supported" for f in findings)
+    assert any(f.check_id == "dumpbox.plane_axis_supported" for f in findings)
 
 
 def test_preflight_blocks_unsupported_port_type_in_mvp():

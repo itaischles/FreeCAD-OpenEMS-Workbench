@@ -228,6 +228,62 @@ def _safe_symbol(value: str) -> str:
     return symbol or "material"
 
 
+def _normalized_dump_type(value: str) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"efield", "e_field", "electric", "electricfield"}:
+        return "EField"
+    return "Unknown"
+
+
+def _normalized_plane_axis(value: str) -> str:
+    axis = str(value or "Z").strip().upper()
+    if axis in {"X", "Y", "Z"}:
+        return axis
+    return "Z"
+
+
+def _scaled_simulation_bounds(simulation_box: dict, model_scale: float) -> tuple[float, float, float, float, float, float] | None:
+    required = ("XMin", "XMax", "YMin", "YMax", "ZMin", "ZMax")
+    if not all(key in simulation_box for key in required):
+        return None
+    xmin = _as_float(simulation_box.get("XMin"), 0.0) * model_scale
+    xmax = _as_float(simulation_box.get("XMax"), 0.0) * model_scale
+    ymin = _as_float(simulation_box.get("YMin"), 0.0) * model_scale
+    ymax = _as_float(simulation_box.get("YMax"), 0.0) * model_scale
+    zmin = _as_float(simulation_box.get("ZMin"), 0.0) * model_scale
+    zmax = _as_float(simulation_box.get("ZMax"), 0.0) * model_scale
+    return (xmin, xmax, ymin, ymax, zmin, zmax)
+
+
+def _mesh_bounds(
+    x_lines: list[float],
+    y_lines: list[float],
+    z_lines: list[float],
+) -> tuple[float, float, float, float, float, float] | None:
+    if len(x_lines) < 2 or len(y_lines) < 2 or len(z_lines) < 2:
+        return None
+    return (
+        float(min(x_lines)),
+        float(max(x_lines)),
+        float(min(y_lines)),
+        float(max(y_lines)),
+        float(min(z_lines)),
+        float(max(z_lines)),
+    )
+
+
+def _plane_start_stop_from_bounds(axis: str, bounds: tuple[float, float, float, float, float, float]) -> tuple[list[float], list[float]]:
+    xmin, xmax, ymin, ymax, zmin, zmax = bounds
+    if axis == "X":
+        mid = round(0.5 * (xmin + xmax), 12)
+        return ([mid, ymin, zmin], [mid, ymax, zmax])
+    if axis == "Y":
+        mid = round(0.5 * (ymin + ymax), 12)
+        return ([xmin, mid, zmin], [xmax, mid, zmax])
+    mid = round(0.5 * (zmin + zmax), 12)
+    return ([xmin, ymin, mid], [xmax, ymax, mid])
+
+
 def _coax_center_from_detection(detection: dict) -> tuple[float, float, float]:
     inner = detection.get("inner") or {}
     outer = detection.get("outer") or {}
@@ -734,6 +790,13 @@ def generate_openems_script(
             )
     lines.append("")
 
+    output_dir = Path(run_output_dir) if run_output_dir else Path("./run")
+    lines.append(f"sim_path = Path({str(output_dir)!r})")
+    lines.append("sim_path.mkdir(parents=True, exist_ok=True)")
+    lines.append("dump_path = sim_path / 'dump'")
+    lines.append("dump_path.mkdir(parents=True, exist_ok=True)")
+    lines.append("")
+
     has_waveguide_port = any(str(port.get("PortType", "")).strip() == "Waveguide" for port in model.ports)
     if has_waveguide_port:
         lines.append("# Waveguide port adapter")
@@ -795,16 +858,68 @@ def generate_openems_script(
     lines.append("")
 
     lines.append("# Dump boxes")
+    lines.append("def _add_e_field_time_dump_plane(csx, dump_directory, start, stop):")
+    lines.append("    add_dump = getattr(csx, 'AddDump', None)")
+    lines.append("    if not callable(add_dump):")
+    lines.append("        raise RuntimeError('CSX object does not expose AddDump required for dump-plane export.')")
+    lines.append("    attempts = [")
+    lines.append("        lambda: add_dump('Et', dump_directory),")
+    lines.append("        lambda: add_dump('Et', subdir=dump_directory),")
+    lines.append("        lambda: add_dump('Et', filename=dump_directory),")
+    lines.append("        lambda: add_dump('Et'),")
+    lines.append("    ]")
+    lines.append("    dump_obj = None")
+    lines.append("    for call in attempts:")
+    lines.append("        try:")
+    lines.append("            dump_obj = call()")
+    lines.append("            break")
+    lines.append("        except TypeError:")
+    lines.append("            continue")
+    lines.append("    if dump_obj is None:")
+    lines.append("        raise RuntimeError('Unable to call AddDump with supported signatures for this openEMS Python build.')")
+    lines.append("    add_box = getattr(dump_obj, 'AddBox', None)")
+    lines.append("    if not callable(add_box):")
+    lines.append("        raise RuntimeError('Dump object does not expose AddBox for plane-region definition.')")
+    lines.append("    try:")
+    lines.append("        add_box(start, stop)")
+    lines.append("    except TypeError:")
+    lines.append("        add_box(start=start, stop=stop)")
+    lines.append("    return dump_obj")
+    bounds = _scaled_simulation_bounds(model.simulation_box or {}, model_scale)
+    if bounds is None:
+        bounds = _mesh_bounds(x_lines, y_lines, z_lines)
     for dump in model.dumpboxes:
+        dump_name = str(dump.get("name", "Dump") or "Dump")
+        if not bool(dump.get("Enabled", True)):
+            lines.append(f"# DUMP {dump_name}: disabled")
+            continue
+
+        dump_type = _normalized_dump_type(str(dump.get("DumpType", "") or ""))
+        if dump_type != "EField":
+            lines.append(f"# DUMP {dump_name}: skipped (unsupported type '{dump.get('DumpType')}'; MVP supports EField only)")
+            continue
+
+        dump_mode = str(dump.get("DumpMode", "") or "TimeDomain").strip()
+        if dump_mode != "TimeDomain":
+            lines.append(f"# DUMP {dump_name}: skipped (unsupported mode '{dump_mode}'; MVP supports TimeDomain only)")
+            continue
+
+        if bounds is None:
+            lines.append(f"# DUMP {dump_name}: skipped (simulation bounds unavailable for plane placement)")
+            continue
+
+        axis = _normalized_plane_axis(dump.get("PlaneAxis", "Z"))
+        start, stop = _plane_start_stop_from_bounds(axis, bounds)
+        symbol = f"dump_{_safe_symbol(dump_name)}"
         lines.append(
-            f"# DUMP {dump.get('name')}: type={dump.get('DumpType')} freq={dump.get('FrequencySpec')}"
+            f"# DUMP {dump_name}: EField TimeDomain plane axis={axis} start={start} stop={stop}"
+        )
+        lines.append(
+            f"{symbol} = _add_e_field_time_dump_plane(CSX, str(dump_path), {start}, {stop})"
         )
     lines.append("")
 
     if runnable:
-        output_dir = Path(run_output_dir) if run_output_dir else Path("./run")
-        lines.append(f"sim_path = Path({str(output_dir)!r})")
-        lines.append("sim_path.mkdir(parents=True, exist_ok=True)")
         lines.append("FDTD.Run(str(sim_path), verbose=3)")
         lines.append("print(f'openEMS run completed: {sim_path}')")
     else:

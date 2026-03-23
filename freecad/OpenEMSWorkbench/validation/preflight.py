@@ -194,24 +194,51 @@ def _check_legacy_boundary_objects(members) -> list[PreflightFinding]:
     return findings
 
 
-def _check_dumpbox_frequency(members) -> list[PreflightFinding]:
+def _check_dumpbox_configuration(members) -> list[PreflightFinding]:
     findings: list[PreflightFinding] = []
     for dump in members.dumpboxes:
-        spec = str(getattr(dump, "FrequencySpec", "")).strip()
-        if not spec:
-            continue
-        parts = [p.strip() for p in spec.split(",") if p.strip()]
-        try:
-            _ = [float(p) for p in parts]
-        except ValueError:
+        dump_type = str(getattr(dump, "DumpType", "") or "EField").strip()
+        if dump_type != "EField":
             findings.append(
                 _finding(
-                    "warning",
-                    "dumpbox.frequency_spec_format",
-                    f"FrequencySpec '{spec}' is not a comma-separated numeric list.",
+                    "error",
+                    "dumpbox.dump_type_supported",
+                    (
+                        f"DumpType '{dump_type}' is not supported in MVP. "
+                        "Use EField."
+                    ),
                     dump,
                 )
             )
+
+        dump_mode = str(getattr(dump, "DumpMode", "") or "TimeDomain").strip()
+        if dump_mode != "TimeDomain":
+            findings.append(
+                _finding(
+                    "error",
+                    "dumpbox.dump_mode_supported",
+                    (
+                        f"DumpMode '{dump_mode}' is not supported in MVP. "
+                        "Use TimeDomain."
+                    ),
+                    dump,
+                )
+            )
+
+        plane_axis = str(getattr(dump, "PlaneAxis", "") or "Z").strip().upper()
+        if plane_axis not in {"X", "Y", "Z"}:
+            findings.append(
+                _finding(
+                    "error",
+                    "dumpbox.plane_axis_supported",
+                    (
+                        f"PlaneAxis '{plane_axis}' is invalid for dump-plane export. "
+                        "Use X, Y, or Z."
+                    ),
+                    dump,
+                )
+            )
+
     return findings
 
 
@@ -1002,7 +1029,7 @@ def run_preflight(analysis: Any) -> list[PreflightFinding]:
     findings.extend(_check_port_numbers(members))
     findings.extend(_check_coordinate_system(members))
     findings.extend(_check_mesh_ownership_boundaries(members))
-    findings.extend(_check_dumpbox_frequency(members))
+    findings.extend(_check_dumpbox_configuration(members))
     findings.extend(_check_output_directory(members))
     findings.extend(_check_solver_configuration(members))
     findings.extend(_check_stl_fallback_runtime_support(analysis, members))

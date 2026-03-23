@@ -27,7 +27,7 @@ class OpenEMSDumpBoxProxy(FeatureProxyBase):
             "App::PropertyEnumeration",
             "DumpType",
             "DumpBox",
-            "Recorded field quantity.",
+            "Recorded field quantity (MVP: EField only).",
             DEFAULTS["dumpbox"]["dump_type"],
         )
         set_enum_choices(
@@ -38,19 +38,39 @@ class OpenEMSDumpBoxProxy(FeatureProxyBase):
         )
         add_property_if_missing(
             obj,
+            "App::PropertyEnumeration",
+            "DumpMode",
+            "DumpBox",
+            "Dump output mode (MVP: TimeDomain only).",
+            DEFAULTS["dumpbox"]["dump_mode"],
+        )
+        set_enum_choices(
+            obj,
+            "DumpMode",
+            ["TimeDomain"],
+            DEFAULTS["dumpbox"]["dump_mode"],
+        )
+        add_property_if_missing(
+            obj,
+            "App::PropertyEnumeration",
+            "PlaneAxis",
+            "DumpBox",
+            "Axis normal to the dump plane.",
+            DEFAULTS["dumpbox"]["plane_axis"],
+        )
+        set_enum_choices(
+            obj,
+            "PlaneAxis",
+            ["X", "Y", "Z"],
+            DEFAULTS["dumpbox"]["plane_axis"],
+        )
+        add_property_if_missing(
+            obj,
             "App::PropertyBool",
             "Enabled",
             "DumpBox",
             "Enable this dump box.",
             DEFAULTS["dumpbox"]["enabled"],
-        )
-        add_property_if_missing(
-            obj,
-            "App::PropertyString",
-            "FrequencySpec",
-            "DumpBox",
-            "Frequency range expression.",
-            DEFAULTS["dumpbox"]["frequency_spec"],
         )
 
 

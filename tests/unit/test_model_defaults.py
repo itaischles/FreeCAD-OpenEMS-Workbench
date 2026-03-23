@@ -30,6 +30,7 @@ def test_coordinate_and_port_enums_are_defined():
     assert "Gaussian" in model.EXCITATION_TYPES
     assert "Sinusoid" in model.EXCITATION_TYPES
     assert "Custom" in model.EXCITATION_TYPES
+    assert model.DUMP_TYPES == ["EField"]
 
 
 def test_excitation_and_port_region_defaults_exist():

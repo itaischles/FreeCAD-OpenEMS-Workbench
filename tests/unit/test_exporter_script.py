@@ -526,3 +526,67 @@ def test_script_generator_exports_run_limit_contract_with_max_time(tmp_path):
     assert "max_time_sec = 5e-08" in text
     assert "_set_max_time = getattr(FDTD, 'SetMaxTime', None)" in text
     assert "Unable to call SetMaxTime with supported signatures" in text
+
+
+def test_script_generator_emits_time_domain_e_field_dump_plane(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={"ExcitationType": "Gaussian", "ExcitationF0": 1e9, "ExcitationFc": 5e8},
+        grid={"name": "Grid"},
+        simulation_box={
+            "XMin": -5.0,
+            "XMax": 5.0,
+            "YMin": -2.0,
+            "YMax": 2.0,
+            "ZMin": 0.0,
+            "ZMax": 10.0,
+        },
+        mesh_lines=_default_mesh_lines(),
+        dumpboxes=[
+            {
+                "name": "Dump1",
+                "DumpType": "EField",
+                "DumpMode": "TimeDomain",
+                "PlaneAxis": "Y",
+                "Enabled": True,
+            }
+        ],
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_dump_plane.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "dump_path = sim_path / 'dump'" in text
+    assert "def _add_e_field_time_dump_plane(csx, dump_directory, start, stop):" in text
+    assert "# DUMP Dump1: EField TimeDomain plane axis=Y" in text
+    assert "dump_Dump1 = _add_e_field_time_dump_plane(CSX, str(dump_path)," in text
+
+
+def test_script_generator_skips_disabled_dump_plane(tmp_path):
+    from OpenEMSWorkbench.exporter.model import ExportModel
+    from OpenEMSWorkbench.exporter.script_generator import generate_openems_script
+
+    model = ExportModel(
+        analysis_name="A1",
+        simulation={"ExcitationType": "Gaussian", "ExcitationF0": 1e9, "ExcitationFc": 5e8},
+        grid={"name": "Grid"},
+        mesh_lines=_default_mesh_lines(),
+        dumpboxes=[
+            {
+                "name": "DumpDisabled",
+                "DumpType": "EField",
+                "DumpMode": "TimeDomain",
+                "PlaneAxis": "Z",
+                "Enabled": False,
+            }
+        ],
+    )
+
+    path = generate_openems_script(model, tmp_path / "script_dump_disabled.py")
+    text = path.read_text(encoding="utf-8")
+
+    assert "# DUMP DumpDisabled: disabled" in text
+    assert "dump_DumpDisabled = _add_e_field_time_dump_plane" not in text

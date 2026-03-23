@@ -51,6 +51,27 @@ def _object_to_dict(obj, fields: list[str]) -> dict:
     return data
 
 
+def _normalized_dumpbox_entry(dump_obj) -> dict:
+    data = _object_to_dict(
+        dump_obj,
+        ["DumpType", "DumpMode", "PlaneAxis", "Enabled"],
+    )
+
+    dump_type = str(data.get("DumpType", "") or "").strip() or "EField"
+    data["DumpType"] = dump_type
+
+    dump_mode = str(data.get("DumpMode", "") or "").strip() or "TimeDomain"
+    data["DumpMode"] = dump_mode
+
+    axis = str(data.get("PlaneAxis", "") or "").strip().upper() or "Z"
+    if axis not in {"X", "Y", "Z"}:
+        axis = "Z"
+    data["PlaneAxis"] = axis
+
+    data["Enabled"] = bool(data.get("Enabled", True))
+    return data
+
+
 def _collect_geometry_objects(analysis) -> list:
     geometry = []
     for obj in list(getattr(analysis, "Group", [])):
@@ -629,8 +650,6 @@ def read_analysis_for_export(analysis) -> dict:
         "materials": material_entries,
         "material_assignments": material_assignments,
         "ports": ports,
-        "dumpboxes": [
-            _object_to_dict(d, ["DumpType", "Enabled", "FrequencySpec"]) for d in members.dumpboxes
-        ],
+        "dumpboxes": [_normalized_dumpbox_entry(d) for d in members.dumpboxes],
         "geometry_objects": geometry_objects,
     }

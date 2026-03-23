@@ -4,7 +4,7 @@ COORDINATE_SYSTEMS = ["Cartesian", "Cylindrical"]
 BOUNDARY_TYPES = ["PML_8", "MUR", "PEC", "PMC"]
 PORT_TYPES = ["Lumped", "Waveguide", "PlaneWave"]
 SIMULATION_BOX_FACE_CHOICES = ["XMin", "XMax", "YMin", "YMax", "ZMin", "ZMax"]
-DUMP_TYPES = ["EField", "HField", "NF2FF"]
+DUMP_TYPES = ["EField"]
 EXCITATION_TYPES = ["Gaussian", "Sinusoid", "Custom"]
 
 DEFAULTS = {
@@ -70,7 +70,8 @@ DEFAULTS = {
 	},
 	"dumpbox": {
 		"dump_type": "EField",
+		"dump_mode": "TimeDomain",
+		"plane_axis": "Z",
 		"enabled": True,
-		"frequency_spec": "1e9,10e9",
 	},
 }
