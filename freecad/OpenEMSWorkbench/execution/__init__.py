@@ -26,19 +26,24 @@ except ImportError:
 	from OpenEMSWorkbench.exporter.document_reader import read_analysis_for_export
 
 try:
-	from execution.process_runner import run_process_blocking
+	from execution.process_runner import run_process_blocking, run_process_in_terminal
 	from execution.runtime_discovery import discover_python_runtime, validate_python_runtime
 except ImportError:
-	from OpenEMSWorkbench.execution.process_runner import run_process_blocking
+	from OpenEMSWorkbench.execution.process_runner import run_process_blocking, run_process_in_terminal
 	from OpenEMSWorkbench.execution.runtime_discovery import (
 		discover_python_runtime,
 		validate_python_runtime,
 	)
 
 try:
-	from utils.runtime_settings import get_saved_solver_executable, set_saved_solver_executable
+	from utils.runtime_settings import (
+		get_saved_openems_install_dir,
+		get_saved_solver_executable,
+		set_saved_solver_executable,
+	)
 except ImportError:
 	from OpenEMSWorkbench.utils.runtime_settings import (
+		get_saved_openems_install_dir,
 		get_saved_solver_executable,
 		set_saved_solver_executable,
 	)
@@ -67,6 +72,13 @@ def _parse_arguments(arguments: str) -> list[str]:
 	if not text:
 		return []
 	return shlex.split(text, posix=False)
+
+
+def _as_float(value, default: float = 0.0) -> float:
+	try:
+		return float(value)
+	except Exception:
+		return float(default)
 
 
 def _looks_like_openems_binary(executable: str) -> bool:
@@ -107,6 +119,24 @@ def _primary_simulation(analysis):
 	return members.simulations[0] if members.simulations else None
 
 
+def _saved_openems_install_dir() -> str:
+	path = str(get_saved_openems_install_dir() or "").strip()
+	return path if path and os.path.isdir(path) else ""
+
+
+def _apply_openems_runtime_environment(env: dict[str, str]) -> dict[str, str]:
+	result = dict(env)
+	install_dir = _saved_openems_install_dir()
+	if install_dir:
+		result["OPENEMS_INSTALL_DIR"] = install_dir
+		result["OPENEMS_INSTALL_PATH"] = install_dir
+		existing_path = str(result.get("PATH", "") or "")
+		prefix = install_dir + os.pathsep
+		if not existing_path.startswith(prefix):
+			result["PATH"] = prefix + existing_path
+	return result
+
+
 def auto_configure_solver_runtime(analysis) -> tuple[bool, str]:
 	simulation = _primary_simulation(analysis)
 	if simulation is None:
@@ -117,6 +147,7 @@ def auto_configure_solver_runtime(analysis) -> tuple[bool, str]:
 		return True, f"SolverExecutable already configured: {configured}"
 
 	saved = str(get_saved_solver_executable() or "").strip()
+	os.environ.update(_apply_openems_runtime_environment(os.environ))
 	if saved:
 		ok, message = validate_python_runtime(saved)
 		if ok:
@@ -152,6 +183,7 @@ def validate_configured_solver_runtime(analysis) -> tuple[bool, str]:
 			"please use a Python interpreter with openEMS/CSXCAD modules.",
 		)
 
+	os.environ.update(_apply_openems_runtime_environment(os.environ))
 	return validate_python_runtime(executable)
 
 
@@ -176,6 +208,8 @@ def run_analysis(
 	solver_executable = str(simulation.get("SolverExecutable") or "").strip()
 	solver_arguments = str(simulation.get("SolverArguments") or "").strip()
 	run_blocking = bool(simulation.get("RunBlocking", True))
+	run_in_terminal_window = bool(simulation.get("RunInTerminalWindow", False))
+	max_run_seconds = _as_float(simulation.get("MaxRunSeconds", 0.0), 0.0)
 	out_dir = str(simulation.get("OutputDirectory") or "").strip()
 
 	if not run_blocking:
@@ -232,10 +266,42 @@ def run_analysis(
 	command.extend(_parse_arguments(solver_arguments))
 	command.append(script_path)
 
-	run_env = dict(os.environ)
+	run_env = _apply_openems_runtime_environment(os.environ)
 	if _looks_like_python_runtime(solver_executable):
 		run_env["PYTHONUNBUFFERED"] = "1"
 		run_env.setdefault("PYTHONIOENCODING", "utf-8")
+
+	if run_in_terminal_window:
+		try:
+			run_process_in_terminal(
+				command=command,
+				cwd=cwd,
+				stdout_log=stdout_log,
+				stderr_log=stderr_log,
+				env=run_env,
+				title="openEMS Simulation",
+			)
+		except Exception as exc:
+			return ExecutionResult(
+				status="failed",
+				message=f"Failed to launch solver process in terminal window: {exc}",
+				command=command,
+				paths={k: str(v) for k, v in paths.items()},
+				preflight_summary=summary,
+				findings=findings,
+			)
+
+		return ExecutionResult(
+			status="launched",
+			message=(
+				"Simulation launched in external terminal window. "
+				"FreeCAD will not block while the solver is running."
+			),
+			command=command,
+			paths={k: str(v) for k, v in paths.items()},
+			preflight_summary=summary,
+			findings=findings,
+		)
 
 	try:
 		proc_result = run_process_blocking(
@@ -246,12 +312,28 @@ def run_analysis(
 			env=run_env,
 			on_stdout_line=on_stdout_line,
 			on_stderr_line=on_stderr_line,
+			timeout_seconds=max_run_seconds,
 		)
 	except Exception as exc:
 		return ExecutionResult(
 			status="failed",
 			message=f"Failed to launch solver process: {exc}",
 			command=command,
+			paths={k: str(v) for k, v in paths.items()},
+			preflight_summary=summary,
+			findings=findings,
+		)
+
+	if getattr(proc_result, "timed_out", False):
+		return ExecutionResult(
+			status="failed",
+			message=(
+				"Solver process timed out and was terminated. "
+				f"Increase MaxRunSeconds to allow longer runs (current: {max_run_seconds})."
+			),
+			exit_code=proc_result.exit_code,
+			duration_seconds=proc_result.duration_seconds,
+			command=proc_result.command,
 			paths={k: str(v) for k, v in paths.items()},
 			preflight_summary=summary,
 			findings=findings,

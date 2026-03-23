@@ -617,6 +617,22 @@ class OpenEMSSimulationProxy(FeatureProxyBase):
             "Run solver synchronously in FreeCAD UI thread.",
             DEFAULTS["simulation"]["run_blocking"],
             )
+            add_property_if_missing(
+            obj,
+            "App::PropertyBool",
+            "RunInTerminalWindow",
+            "Run",
+            "Launch solver in a dedicated terminal window and stream output there.",
+            DEFAULTS["simulation"]["run_in_terminal_window"],
+            )
+            add_property_if_missing(
+            obj,
+            "App::PropertyFloat",
+            "MaxRunSeconds",
+            "Run",
+            "Maximum run duration in seconds (0 disables timeout).",
+            DEFAULTS["simulation"]["max_run_seconds"],
+            )
             set_enum_choices(
             obj,
             "CoordinateSystem",

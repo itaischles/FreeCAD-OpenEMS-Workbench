@@ -28,6 +28,8 @@ DEFAULTS = {
 		"solver_executable": "",
 		"solver_arguments": "",
 		"run_blocking": True,
+		"run_in_terminal_window": False,
+		"max_run_seconds": 0.0,
 	},
 	"material": {
 		"epsilon_r": 1.0,

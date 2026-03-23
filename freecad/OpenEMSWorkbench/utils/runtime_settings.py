@@ -8,6 +8,7 @@ except Exception:  # pragma: no cover - FreeCAD runtime only
 
 _PARAM_ROOT = "User parameter:BaseApp/Preferences/Mod/OpenEMSWorkbench"
 _PARAM_SOLVER_EXECUTABLE = "SolverExecutable"
+_PARAM_OPENEMS_INSTALL_DIR = "OpenEMSInstallDir"
 
 
 def _param_group():
@@ -37,4 +38,30 @@ def set_saved_solver_executable(executable: str) -> bool:
         return False
 
 
-__all__ = ["get_saved_solver_executable", "set_saved_solver_executable"]
+def get_saved_openems_install_dir() -> str:
+    group = _param_group()
+    if group is None:
+        return ""
+    try:
+        return str(group.GetString(_PARAM_OPENEMS_INSTALL_DIR, "") or "").strip()
+    except Exception:
+        return ""
+
+
+def set_saved_openems_install_dir(install_dir: str) -> bool:
+    group = _param_group()
+    if group is None:
+        return False
+    try:
+        group.SetString(_PARAM_OPENEMS_INSTALL_DIR, str(install_dir or "").strip())
+        return True
+    except Exception:
+        return False
+
+
+__all__ = [
+    "get_saved_solver_executable",
+    "set_saved_solver_executable",
+    "get_saved_openems_install_dir",
+    "set_saved_openems_install_dir",
+]

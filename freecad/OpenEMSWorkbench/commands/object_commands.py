@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 try:
     import FreeCAD as App
@@ -91,6 +92,17 @@ except ImportError:
     from OpenEMSWorkbench.utils.runtime_settings import (
         get_saved_solver_executable,
         set_saved_solver_executable,
+    )
+
+try:
+    from utils.runtime_settings import (
+        get_saved_openems_install_dir,
+        set_saved_openems_install_dir,
+    )
+except ImportError:
+    from OpenEMSWorkbench.utils.runtime_settings import (
+        get_saved_openems_install_dir,
+        set_saved_openems_install_dir,
     )
 
 
@@ -260,6 +272,17 @@ def _read_log_tail(path: str, max_lines: int = 3) -> str:
         return " | ".join(lines[-max_lines:])
     except Exception:
         return ""
+
+
+def _stderr_severity(line: str) -> str:
+    text = str(line or "").strip().lower()
+    if not text:
+        return "info"
+    if any(token in text for token in ("fatal", "traceback", "exception", "error:")):
+        return "error"
+    if "warning" in text:
+        return "warning"
+    return "info"
 
 
 def _mesh_cap_summary(grid, mesh) -> str:
@@ -804,7 +827,13 @@ class _RunSimulationCommand:
         def _solver_stderr(line: str):
             if not line:
                 return
-            App.Console.PrintError(f"openEMS: {line}\n")
+            severity = _stderr_severity(line)
+            if severity == "error":
+                App.Console.PrintError(f"openEMS: {line}\n")
+            elif severity == "warning" and hasattr(App.Console, "PrintWarning"):
+                App.Console.PrintWarning(f"openEMS: {line}\n")
+            else:
+                App.Console.PrintMessage(f"openEMS: {line}\n")
             if Gui is not None:
                 try:
                     Gui.updateGui()
@@ -829,6 +858,8 @@ class _RunSimulationCommand:
             App.Console.PrintError(f"OpenEMS: Run failed: {result.message}\n")
             if result.exit_code is not None:
                 App.Console.PrintError(f"OpenEMS: Exit code {result.exit_code}\n")
+        elif result.status == "launched":
+            App.Console.PrintMessage(f"OpenEMS: {result.message}\n")
         else:
             App.Console.PrintMessage("OpenEMS: Simulation completed successfully.\n")
 
@@ -949,34 +980,53 @@ class _ConfigureRuntimeCommand:
             App.Console.PrintError("OpenEMS: Qt runtime is unavailable for file selection.\n")
             return
 
-        initial = get_saved_solver_executable()
-        selected, _ = QtWidgets.QFileDialog.getOpenFileName(
+        initial = get_saved_openems_install_dir() or r"C:\openEMS"
+        selected = QtWidgets.QFileDialog.getExistingDirectory(
             None,
-            "Select Python Runtime for OpenEMS",
+            "Select openEMS Installation Folder",
             initial,
-            "Python executable (python*.exe);;Executable (*.exe);;All files (*)",
+            QtWidgets.QFileDialog.ShowDirsOnly,
         )
         selected = str(selected or "").strip()
         if not selected:
             App.Console.PrintMessage("OpenEMS: Runtime configuration canceled.\n")
             return
+        if not os.path.isdir(selected):
+            App.Console.PrintError(f"OpenEMS: Invalid openEMS folder: {selected}\n")
+            return
 
         try:
             try:
-                from execution.runtime_discovery import validate_python_runtime
+                from execution.runtime_discovery import discover_python_runtime
             except ImportError:
-                from OpenEMSWorkbench.execution.runtime_discovery import validate_python_runtime
+                from OpenEMSWorkbench.execution.runtime_discovery import discover_python_runtime
         except Exception as exc:
             App.Console.PrintError(f"OpenEMS: Failed to load runtime validator: {exc}\n")
             return
 
-        ok, message = validate_python_runtime(selected)
-        if not ok:
-            App.Console.PrintError(f"OpenEMS: Runtime validation failed: {message}\n")
+        os.environ["OPENEMS_INSTALL_DIR"] = selected
+        os.environ["OPENEMS_INSTALL_PATH"] = selected
+
+        preferred_candidates = [
+            sys.executable,
+            os.path.join(os.path.dirname(sys.executable), "python.exe"),
+            os.path.join(sys.prefix, "python.exe"),
+            get_saved_solver_executable(),
+        ]
+        result = discover_python_runtime(preferred_candidates=preferred_candidates)
+        if not result.ok:
+            checked = " | ".join(result.checked[-3:]) if result.checked else ""
+            suffix = f" Checked: {checked}" if checked else ""
+            App.Console.PrintError(
+                "OpenEMS: Could not auto-detect a Python interpreter with openEMS/CSXCAD modules "
+                f"for installation folder '{selected}'. {result.message}{suffix}\n"
+            )
             return
 
-        set_saved_solver_executable(selected)
-        App.Console.PrintMessage(f"OpenEMS: Saved default runtime: {selected}\n")
+        set_saved_openems_install_dir(selected)
+        set_saved_solver_executable(result.executable)
+        App.Console.PrintMessage(f"OpenEMS: Saved openEMS installation folder: {selected}\n")
+        App.Console.PrintMessage(f"OpenEMS: Auto-detected Python runtime: {result.executable}\n")
 
         doc = App.ActiveDocument
         if doc is None:
@@ -984,7 +1034,7 @@ class _ConfigureRuntimeCommand:
         analysis = _active_or_single_analysis(doc)
         simulation = _analysis_simulation(analysis)
         if simulation is not None:
-            simulation.SolverExecutable = selected
+            simulation.SolverExecutable = result.executable
             doc.recompute()
             App.Console.PrintMessage(
                 f"OpenEMS: Applied runtime to simulation '{getattr(simulation, 'Label', simulation.Name)}'.\n"

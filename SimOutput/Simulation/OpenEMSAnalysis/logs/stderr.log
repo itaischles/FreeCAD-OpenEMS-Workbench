@@ -1,0 +1,115 @@
+-----------------------------------------
+ Property #0 Type: "Metal" Name: "OpenEMSMaterial"
+ Primitive Count 	: 2
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #0 Type: "Cylinder" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (-39,-39,0) P2: (39,39,100)
+  Transform: None
+  Axis-Start: 0,0,0
+  Axis-Stop : 0,0,100
+  Radius: 39
+ ---- 
+  Primitive #1 Type: "PolyhedronReader" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (0,0,0) P2: (0,0,0)
+  Transform: None
+ Number of Vertices: 0
+ Number of Faces: 0
+ Number of invalid Faces: 0
+-----------------------------------------
+ Property #1 Type: "Material" Name: "OpenEMSMaterial001"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #2 Type: "PolyhedronReader" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (0,0,0) P2: (0,0,0)
+  Transform: None
+ Number of Vertices: 0
+ Number of Faces: 0
+ Number of invalid Faces: 0
+ --- Material --- 
+  Isotropy	: 1
+  Epsilon_R	: 65, 1, 1
+  Kappa		: 0, 0, 0
+  Mue_R		: 1, 1, 1
+  Sigma		: 0, 0, 0
+  Density	: 0
+-----------------------------------------
+ Property #2 Type: "Excitation" Name: "port_excite_1"
+ Primitive Count 	: 0
+ Coordinate System 	: 0
+  -- Primitives: --
+ --- Excitation Properties --- 
+  Type: 0
+  Enabled: 1
+  Active directions: 1,1,1
+  Excitation	: 1, 1, 0
+  Weighting	: 1, 1, 1
+  Propagation Dir: 0, 0, 0
+  Delay		: 0
+-----------------------------------------
+ Property #3 Type: "Excitation" Name: "port_excite_1"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #3 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (-127.5,-127.5,15) P2: (127.5,127.5,15)
+  Transform: None
+  Start: -127.5,-127.5,15
+  Stop : 127.5,127.5,15
+ --- Excitation Properties --- 
+  Type: 0
+  Enabled: 1
+  Active directions: 1,1,1
+  Excitation	: 1, 1, 0
+  Weighting	: ((x-(0.050024096929))/((((x-(0.050024096929))*(x-(0.050024096929))) + ((y-(0.0))*(y-(0.0))))*1.1845547184688343)), ((y-(0.0))/((((x-(0.050024096929))*(x-(0.050024096929))) + ((y-(0.0))*(y-(0.0))))*1.1845547184688343)), 0
+  Propagation Dir: 0, 0, 0
+  Delay		: 0
+-----------------------------------------
+ Property #4 Type: "ProbeBox" Name: "port_ut_1"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #4 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (-127.5,-127.5,20) P2: (127.5,127.5,20)
+  Transform: None
+  Start: -127.5,-127.5,20
+  Stop : 127.5,127.5,20
+-----------------------------------------
+ Property #5 Type: "ProbeBox" Name: "port_it_1"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #5 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (-127.5,-127.5,20) P2: (127.5,127.5,20)
+  Transform: None
+  Start: -127.5,-127.5,20
+  Stop : 127.5,127.5,20
+-----------------------------------------
+ Property #6 Type: "DumpBox" Name: "Et"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #6 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (-127.5,0,0) P2: (127.5,0,100)
+  Transform: None
+  Start: -127.5,0,0
+  Stop : 127.5,0,100
+ --- Dump Properties --- 
+  DumpType: 0  DumpMode: 0 FileType: 0 MultiGridLevel: 0
+Operator::InitDataStorage(): Storing epsR material data...
+Operator::InitDataStorage(): Storing muR material data...
+Operator::CleanupMaterialStorage(): Delete epsR material data...
+Operator::CleanupMaterialStorage(): Delete mueR material data...
+Warning: Unused primitive (type: PolyhedronReader) detected in property: OpenEMSMaterial!
+Warning: Unused primitive (type: PolyhedronReader) detected in property: OpenEMSMaterial001!
+Warning: No primitives found in property: port_excite_1!
+RunFDTD: Warning: Max. number of timesteps was reached before the end-criteria of -50dB was reached... 
+	You may want to choose a higher number of max. timesteps... 

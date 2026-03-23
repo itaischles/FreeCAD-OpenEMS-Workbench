@@ -9,18 +9,44 @@ import subprocess
 import sys
 
 
-_CHECK_SNIPPET = (
-    "import json, os; "
-    "root=(os.environ.get('OPENEMS_INSTALL_DIR','') or os.environ.get('OPENEMS_INSTALL_PATH','')).strip(); "
-    "(os.add_dll_directory(root) if (root and hasattr(os,'add_dll_directory')) else None); "
-    "import openEMS, CSXCAD; "
-    "from CSXCAD import CSPrimitives as _csprims; "
-    "reader_cls=getattr(_csprims,'CSPrimPolyhedronReader',None); "
-    "stl_enum=getattr(_csprims,'STL_FILE',None); "
-    "payload={'capabilities': {'stl_reader': bool(reader_cls is not None and stl_enum is not None)}, "
-    "'details': {'polyhedron_reader_class': 'present' if reader_cls is not None else 'missing', "
-    "'stl_file_enum': 'present' if stl_enum is not None else 'missing'}}; "
-    "print('OPENEMS_PYTHON_RUNTIME=' + json.dumps(payload, sort_keys=True))"
+_CHECK_SNIPPET = "\n".join(
+    [
+        "import json",
+        "import os",
+        "import tempfile",
+        "root = (os.environ.get('OPENEMS_INSTALL_DIR', '') or os.environ.get('OPENEMS_INSTALL_PATH', '')).strip()",
+        "if root and hasattr(os, 'add_dll_directory'):",
+        "    os.add_dll_directory(root)",
+        "import openEMS",
+        "import CSXCAD",
+        "from CSXCAD import CSPrimitives as _csprims",
+        "reader_cls = getattr(_csprims, 'CSPrimPolyhedronReader', None)",
+        "stl_enum = getattr(_csprims, 'STL_FILE', None)",
+        "stl_smoke_ok = False",
+        "stl_smoke_error = ''",
+        "_probe_path = ''",
+        "try:",
+        "    csx = CSXCAD.ContinuousStructure()",
+        "    pec = csx.AddMetal('runtime_probe')",
+        "    fd, _probe_path = tempfile.mkstemp(suffix='.stl')",
+        "    os.close(fd)",
+        "    with open(_probe_path, 'w', encoding='ascii') as _fh:",
+        "        _fh.write('solid runtime_probe\\n facet normal 0 0 1\\n  outer loop\\n   vertex 0 0 0\\n   vertex 1 0 0\\n   vertex 0 1 0\\n  endloop\\n endfacet\\nendsolid runtime_probe\\n')",
+        "    _reader = pec.AddPolyhedronReader(_probe_path, priority=1)",
+        "    _probe_result = _reader.ReadFile()",
+        "    stl_smoke_ok = (_probe_result is not False)",
+        "except Exception as _exc:",
+        "    stl_smoke_error = type(_exc).__name__ + ': ' + str(_exc)",
+        "finally:",
+        "    if _probe_path and os.path.isfile(_probe_path):",
+        "        os.remove(_probe_path)",
+        "payload = {'capabilities': {'stl_reader': bool(reader_cls is not None and (stl_enum is not None or stl_smoke_ok))},",
+        "           'details': {'polyhedron_reader_class': 'present' if reader_cls is not None else 'missing',",
+        "                      'stl_file_enum': 'present' if stl_enum is not None else 'missing',",
+        "                      'stl_smoke_test': 'passed' if stl_smoke_ok else 'failed',",
+        "                      'stl_smoke_error': stl_smoke_error}}",
+        "print('OPENEMS_PYTHON_RUNTIME=' + json.dumps(payload, sort_keys=True))",
+    ]
 )
 
 _CHECK_PREFIX = "OPENEMS_PYTHON_RUNTIME="
@@ -45,6 +71,17 @@ def _resolve_openems_install_dir() -> str:
     env_root = _normalize_candidate(os.environ.get("OPENEMS_INSTALL_DIR", ""))
     if env_root and os.path.isdir(env_root):
         return env_root
+
+    try:
+        try:
+            from utils.runtime_settings import get_saved_openems_install_dir
+        except ImportError:
+            from OpenEMSWorkbench.utils.runtime_settings import get_saved_openems_install_dir
+        saved_root = _normalize_candidate(get_saved_openems_install_dir())
+        if saved_root and os.path.isdir(saved_root):
+            return saved_root
+    except Exception:
+        pass
 
     fallback = _normalize_candidate(r"C:\openEMS")
     if fallback and os.path.isdir(fallback):
@@ -133,8 +170,11 @@ def inspect_python_runtime(executable: str, timeout_seconds: int = 20) -> Runtim
     return RuntimeDiscoveryResult(ok=False, executable=candidate, message=detail)
 
 
-def _candidate_executables() -> list[str]:
+def _candidate_executables(preferred_candidates: list[str] | None = None) -> list[str]:
     candidates: list[str] = []
+
+    for candidate in list(preferred_candidates or []):
+        candidates.append(candidate)
 
     candidates.append(sys.executable)
 
@@ -163,9 +203,14 @@ def _candidate_executables() -> list[str]:
     return normalized
 
 
-def discover_python_runtime() -> RuntimeDiscoveryResult:
+def discover_python_runtime(preferred_candidates: list[str] | None = None) -> RuntimeDiscoveryResult:
     checked: list[str] = []
-    for candidate in _candidate_executables():
+    candidates = (
+        _candidate_executables(preferred_candidates)
+        if preferred_candidates is not None
+        else _candidate_executables()
+    )
+    for candidate in candidates:
         result = inspect_python_runtime(candidate)
         detail = result.message
         checked.append(f"{candidate}: {detail}")

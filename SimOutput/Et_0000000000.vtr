@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<VTKFile type="RectilinearGrid" version="0.1" byte_order="LittleEndian" header_type="UInt32" compressor="vtkZLibDataCompressor">
+  <RectilinearGrid WholeExtent="0 55 0 0 0 20">
+  <Piece Extent="0 55 0 0 0 20">
+    <PointData>
+      <DataArray type="Float32" Name="E-Field" NumberOfComponents="3" format="binary" RangeMin="0" RangeMax="0">
+        AQAAAACAAAAgNwAAJQAAAA==eJztwQENAAAAwqD3T20ON6AAAAAAAAAAAAAAAAAA4M8ANyAAAQ==
+        <InformationKey name="L2_NORM_RANGE" location="vtkDataArray" length="2">
+          <Value index="0">
+            0
+          </Value>
+          <Value index="1">
+            0
+          </Value>
+        </InformationKey>
+      </DataArray>
+    </PointData>
+    <CellData>
+    </CellData>
+    <Coordinates>
+      <DataArray type="Float64" Name="Array 000001F764D32620" format="binary" RangeMin="-0.1275" RangeMax="0.1275">
+        AQAAAACAAADAAQAA/AAAAA==eJw1kTFIglEUhZv/uRx1VRyd9Yy25uwotuZq0BbhJEIQRUPwEkRIUql+LDo/umqrODQ425qteS/Hszx4fO/cc8+rxOnLzUnCA1fCanv6m62SR4Pyunn4ycXc9MEdtCPfWYqW4aw44TZrZEzHBm88rZtemXHwhUZFyzHdrj3isWHloeY8s1E0oyf69brPiufocWb4tMv5tjC5/g4suAIfzS48MOcB7+kxohv+WKxNh3e3phbdJr7gudk2a/sTuoc46B3kA/lCc6C5yF+lVl9/AcoF5YRyQ3tAe0F7QntDPUC9QD1BvUE9Qr1CPUO9Q/8A/YvmJMqR4B+t8N29
+      </DataArray>
+      <DataArray type="Float64" Name="Array 000001F764D32710" format="binary" RangeMin="-0.0025" RangeMax="-0.0025">
+        AQAAAACAAAAIAAAAEAAAAA==eJyrFlnn/rAqZT8AEFwEAw==
+      </DataArray>
+      <DataArray type="Float64" Name="Array 000001F764D328F0" format="binary" RangeMin="0" RangeMax="0.1">
+        AQAAAACAAACoAAAAbgAAAA==eJxjYICAapF17g+rSuwhdIv9DrnW14E7+qD8KfazZoIBVHye/ZtAEGshVH6JPdf1xQW2XMuh6lbaa8b0H/qqsQaqfp39EqDs9cUboPo22huDwWao/i32h79qAHVshZqz3T4IohFq3k57AIWiTcs=
+      </DataArray>
+    </Coordinates>
+  </Piece>
+  </RectilinearGrid>
+</VTKFile>

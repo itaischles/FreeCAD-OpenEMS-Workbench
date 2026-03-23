@@ -348,3 +348,118 @@ def test_run_analysis_fails_when_logs_report_setup_failure(monkeypatch, tmp_path
     result = execution.run_analysis(object(), tmp_path, "Doc")
     assert result.status == "failed"
     assert "setup/runtime failure" in result.message
+
+
+def test_run_analysis_launches_external_terminal_when_enabled(monkeypatch, tmp_path):
+    from OpenEMSWorkbench import execution
+
+    seen: dict = {}
+
+    monkeypatch.setattr(
+        execution,
+        "validate_configured_solver_runtime",
+        lambda analysis: (True, "ok"),
+    )
+    monkeypatch.setattr(
+        execution,
+        "preflight_gate",
+        lambda analysis: (True, [], {"ok": True, "errors": 0, "warnings": 0, "infos": 0}),
+    )
+    monkeypatch.setattr(
+        execution,
+        "read_analysis_for_export",
+        lambda analysis: {
+            "simulation": {
+                "SolverExecutable": "python.exe",
+                "SolverArguments": "",
+                "RunBlocking": True,
+                "RunInTerminalWindow": True,
+                "OutputDirectory": "",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        execution,
+        "export_analysis_run_ready",
+        lambda analysis, base_output_dir, document_name, run_output_dir=None: {
+            "paths": {
+                "root": str(tmp_path / "root"),
+                "script": str(tmp_path / "root" / "openems_export.py"),
+                "stdout_log": str(tmp_path / "root" / "logs" / "stdout.log"),
+                "stderr_log": str(tmp_path / "root" / "logs" / "stderr.log"),
+            }
+        },
+    )
+
+    def _launcher(**kwargs):
+        seen.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(execution, "run_process_in_terminal", _launcher)
+    monkeypatch.setattr(
+        execution,
+        "run_process_blocking",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("blocking runner should not be used")),
+    )
+
+    result = execution.run_analysis(object(), tmp_path, "Doc")
+
+    assert result.status == "launched"
+    assert "terminal window" in result.message.lower()
+    assert seen["title"] == "openEMS Simulation"
+    assert "-u" in seen["command"]
+
+
+def test_run_analysis_reports_timeout_termination(monkeypatch, tmp_path):
+    from OpenEMSWorkbench import execution
+
+    class _TimedOutResult:
+        exit_code = -15
+        command = ["python.exe", "-u", "script.py"]
+        cwd = str(tmp_path / "root")
+        duration_seconds = 5.0
+        stdout_log = str(tmp_path / "root" / "logs" / "stdout.log")
+        stderr_log = str(tmp_path / "root" / "logs" / "stderr.log")
+        timed_out = True
+
+    monkeypatch.setattr(
+        execution,
+        "validate_configured_solver_runtime",
+        lambda analysis: (True, "ok"),
+    )
+    monkeypatch.setattr(
+        execution,
+        "preflight_gate",
+        lambda analysis: (True, [], {"ok": True, "errors": 0, "warnings": 0, "infos": 0}),
+    )
+    monkeypatch.setattr(
+        execution,
+        "read_analysis_for_export",
+        lambda analysis: {
+            "simulation": {
+                "SolverExecutable": "python.exe",
+                "SolverArguments": "",
+                "RunBlocking": True,
+                "RunInTerminalWindow": False,
+                "MaxRunSeconds": 5.0,
+                "OutputDirectory": "",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        execution,
+        "export_analysis_run_ready",
+        lambda analysis, base_output_dir, document_name, run_output_dir=None: {
+            "paths": {
+                "root": str(tmp_path / "root"),
+                "script": str(tmp_path / "root" / "openems_export.py"),
+                "stdout_log": str(tmp_path / "root" / "logs" / "stdout.log"),
+                "stderr_log": str(tmp_path / "root" / "logs" / "stderr.log"),
+            }
+        },
+    )
+    monkeypatch.setattr(execution, "run_process_blocking", lambda **kwargs: _TimedOutResult())
+
+    result = execution.run_analysis(object(), tmp_path, "Doc")
+    assert result.status == "failed"
+    assert "timed out" in result.message.lower()

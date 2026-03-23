@@ -1,0 +1,90 @@
+openEMS - verbose level 3
+ ---------------------------------------------------------------------- 
+ | openEMS 64bit -- version v0.0.36-93-g7b9cd51
+ | (C) 2010-2025 Thorsten Liebig <thorsten.liebig@gmx.de>  GPL license
+ ---------------------------------------------------------------------- 
+	Used external libraries:
+		CSXCAD -- Version: v0.6.3-48-gcec39c1
+		hdf5   -- Version: 1.12.0
+		          compiled against: HDF5 library version: 1.12.0
+		tinyxml -- compiled against: 2.6.2
+		fparser
+		boost  -- compiled against: 1_72
+		vtk -- Version: 8.2.0
+		       compiled against: 8.2.0
+
+Create FDTD operator (compressed SSE + multi-threading)
+Multithreaded operator using 16 threads.
+Operator::CalcTimestep_Var3: Smallest timestep (3.72529e-12s) found at position: 0 : 19;20;0
+Compressing the FDTD operator... this may take a while...
+------- Stat: FDTD Operator -------
+Dimensions		: 56x56x21 = 65856 Cells (0.065856 MCells)
+Size of Operator	: 3161088 Byte (3.01465 MiB) 
+Size of Field-Data	: 1580544 Byte (1.50732 MiB) 
+-----------------------------------
+Background materials (epsR/mueR/kappa/sigma): 1/1/0/0
+-----------------------------------
+Number of PEC edges	: 12364
+in x direction		: 4242
+in y direction		: 4242
+in z direction		: 3880
+-----------------------------------
+Timestep (s)		: 3.72529e-12
+Timestep method name	: Rennings_2
+Nyquist criteria (TS)	: 89
+Nyquist criteria (s)	: 3.31551e-10
+-----------------------------------
+SSE compression enabled	: yes
+Unique SSE operators	: 3328
+-----------------------------------
+-----------------------------------
+--- Excitation Extension ---
+Voltage excitations	: 6104	 (3080, 3024, 0)
+Current excitations	: 0	 (0, 0, 0)
+Excitation Length (TS)	: 1539
+Excitation Length (s)	: 5.73323e-09
+--- Uniaxial PML Extension ---
+ PML range		: [0,0,0] to [8,55,20]
+ Grading function	: " -log(1e-6)*log(2.5)/(2*dl*Z*(pow(2.5,W/dl)-1)) * pow(2.5, D/dl) "
+--- Uniaxial PML Extension ---
+ PML range		: [47,0,0] to [55,55,20]
+ Grading function	: " -log(1e-6)*log(2.5)/(2*dl*Z*(pow(2.5,W/dl)-1)) * pow(2.5, D/dl) "
+--- Uniaxial PML Extension ---
+ PML range		: [9,0,0] to [46,8,20]
+ Grading function	: " -log(1e-6)*log(2.5)/(2*dl*Z*(pow(2.5,W/dl)-1)) * pow(2.5, D/dl) "
+--- Uniaxial PML Extension ---
+ PML range		: [9,47,0] to [46,55,20]
+ Grading function	: " -log(1e-6)*log(2.5)/(2*dl*Z*(pow(2.5,W/dl)-1)) * pow(2.5, D/dl) "
+--- Uniaxial PML Extension ---
+ PML range		: [9,9,0] to [46,46,8]
+ Grading function	: " -log(1e-6)*log(2.5)/(2*dl*Z*(pow(2.5,W/dl)-1)) * pow(2.5, D/dl) "
+--- Uniaxial PML Extension ---
+ PML range		: [9,9,12] to [46,46,20]
+ Grading function	: " -log(1e-6)*log(2.5)/(2*dl*Z*(pow(2.5,W/dl)-1)) * pow(2.5, D/dl) "
+-----------------------------------
+Creation time for operator: 0.202166 s
+FDTD simulation size: 56x56x21 --> 65856 FDTD cells 
+FDTD timestep is: 3.72529e-12 s; Nyquist rate: 89 timesteps @1.50806e+09 Hz
+Excitation signal length is: 1539 timesteps (5.73323e-09s)
+Max. number of timesteps: 5368 ( --> 3.48798 * Excitation signal length)
+Create FDTD engine (compressed SSE + multi-threading)
+---  Engine::SortExtensionByPriority() ---
+ #0: Uniaxial PML Extension (1000000)
+ #1: Uniaxial PML Extension (1000000)
+ #2: Uniaxial PML Extension (1000000)
+ #3: Uniaxial PML Extension (1000000)
+ #4: Uniaxial PML Extension (1000000)
+ #5: Uniaxial PML Extension (1000000)
+ #6: Excitation Extension (-1000)
+Multithreaded engine using 1 threads. Utilization: (56)
+Setting up processing...
+Running FDTD engine... this may take a while... grab a cup of coffee?!?
+[@        4s] Timestep:         1034 || Speed:   16.7 MC/s (3.939e-03 s/TS) || Energy: ~8.00e-14 (- 2.10dB)
+Multithreaded engine using 2 threads. Utilization: (28;28)
+[@        8s] Timestep:         2772 || Speed:   28.4 MC/s (2.320e-03 s/TS) || Energy: ~3.12e-17 (-36.19dB)
+Multithreaded engine using 3 threads. Utilization: (19;19;18)
+[@       12s] Timestep:         4862 || Speed:   34.1 MC/s (1.932e-03 s/TS) || Energy: ~1.79e-16 (-28.60dB)
+Multithreaded engine using 4 threads. Utilization: (14;14;14;14)
+Time for 5368 iterations with 65856.00 cells : 13.08 sec
+Speed: 27.02 MCells/s 
+openEMS run completed: C:\Users\itaisc\Documents\Python\FreeCAD-OpenEMS\SimOutput

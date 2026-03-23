@@ -565,6 +565,8 @@ def read_analysis_for_export(analysis) -> dict:
                 "SolverExecutable",
                 "SolverArguments",
                 "RunBlocking",
+                "RunInTerminalWindow",
+                "MaxRunSeconds",
             ],
         )
         if simulation is not None
