@@ -32,6 +32,15 @@ except ImportError:
 class OpenEMSGridProxy(FeatureProxyBase):
     TYPE = "OpenEMS_Grid"
 
+    _OVERLAY_RELEVANT_PROPERTIES = {
+        "CoordinateSystem",
+        "MeshBaseStep",
+        "MeshMaxStep",
+        "MeshGrowthRate",
+        "MeshAutoSmooth",
+        "MeshPreviewLineCap",
+    }
+
     def ensure_properties(self, obj):
         add_property_if_missing(
             obj,
@@ -88,6 +97,19 @@ class OpenEMSGridProxy(FeatureProxyBase):
             DEFAULTS["grid"]["mesh_preview_line_cap"],
         )
 
+    def onChanged(self, obj, prop: str) -> None:  # noqa: N802 - FreeCAD API
+        if str(prop) not in self._OVERLAY_RELEVANT_PROPERTIES:
+            return
+
+        view_obj = getattr(obj, "ViewObject", None)
+        if view_obj is None or not bool(getattr(view_obj, "Visibility", True)):
+            return
+
+        view_proxy = getattr(view_obj, "Proxy", None)
+        refresh = getattr(view_proxy, "refresh_overlay_from_grid_change", None)
+        if callable(refresh):
+            refresh()
+
 
 class OpenEMSGridViewProvider(ViewProviderBase):
     TYPE = "OpenEMS_GridView"
@@ -113,6 +135,13 @@ class OpenEMSGridViewProvider(ViewProviderBase):
         except Exception:
             return
         show_overlay(mesh)
+
+    def refresh_overlay_from_grid_change(self) -> None:
+        obj = getattr(self, "Object", None)
+        view_obj = getattr(obj, "ViewObject", None)
+        if view_obj is None or not bool(getattr(view_obj, "Visibility", True)):
+            return
+        self._show_grid_overlay()
 
     def onChanged(self, vobj, prop: str):  # noqa: N802 - FreeCAD API
         if str(prop) != "Visibility":

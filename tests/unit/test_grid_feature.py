@@ -80,3 +80,67 @@ def test_grid_viewprovider_visibility_toggles_overlay(monkeypatch):
     vobj.Visibility = False
     viewprovider.onChanged(vobj, "Visibility")
     assert calls["hide"] == 1
+
+
+def test_grid_proxy_property_change_refreshes_overlay_when_visible(monkeypatch):
+    from OpenEMSWorkbench.objects import grid_feature
+    from OpenEMSWorkbench.objects.grid_feature import OpenEMSGridProxy, OpenEMSGridViewProvider
+
+    class _AnalysisProxy:
+        TYPE = "OpenEMS_Analysis"
+
+    calls = {"show": 0}
+    simulation_mesh = object()
+    monkeypatch.setattr(
+        grid_feature,
+        "build_mesh_for_analysis",
+        lambda analysis: (analysis, None, simulation_mesh),
+    )
+    monkeypatch.setattr(grid_feature, "show_overlay", lambda mesh: calls.__setitem__("show", calls["show"] + 1) or (True, "ok"))
+
+    grid_obj = type("Grid", (), {})()
+    analysis_obj = type("Analysis", (), {"Proxy": _AnalysisProxy(), "Group": [grid_obj]})()
+    doc = type("Doc", (), {"Objects": [analysis_obj]})()
+    grid_obj.Document = doc
+
+    viewprovider = OpenEMSGridViewProvider()
+    vobj = type("ViewObj", (), {"Object": grid_obj, "Visibility": True})()
+    viewprovider.attach(vobj)
+    grid_obj.ViewObject = vobj
+
+    proxy = OpenEMSGridProxy()
+    proxy.onChanged(grid_obj, "MeshBaseStep")
+
+    assert calls["show"] == 1
+
+
+def test_grid_proxy_property_change_does_not_refresh_overlay_when_hidden(monkeypatch):
+    from OpenEMSWorkbench.objects import grid_feature
+    from OpenEMSWorkbench.objects.grid_feature import OpenEMSGridProxy, OpenEMSGridViewProvider
+
+    class _AnalysisProxy:
+        TYPE = "OpenEMS_Analysis"
+
+    calls = {"show": 0}
+    simulation_mesh = object()
+    monkeypatch.setattr(
+        grid_feature,
+        "build_mesh_for_analysis",
+        lambda analysis: (analysis, None, simulation_mesh),
+    )
+    monkeypatch.setattr(grid_feature, "show_overlay", lambda mesh: calls.__setitem__("show", calls["show"] + 1) or (True, "ok"))
+
+    grid_obj = type("Grid", (), {})()
+    analysis_obj = type("Analysis", (), {"Proxy": _AnalysisProxy(), "Group": [grid_obj]})()
+    doc = type("Doc", (), {"Objects": [analysis_obj]})()
+    grid_obj.Document = doc
+
+    viewprovider = OpenEMSGridViewProvider()
+    vobj = type("ViewObj", (), {"Object": grid_obj, "Visibility": False})()
+    viewprovider.attach(vobj)
+    grid_obj.ViewObject = vobj
+
+    proxy = OpenEMSGridProxy()
+    proxy.onChanged(grid_obj, "MeshBaseStep")
+
+    assert calls["show"] == 0
