@@ -74,14 +74,54 @@ def _normalized_dumpbox_entry(dump_obj) -> dict:
 
 def _collect_geometry_objects(analysis) -> list:
     geometry = []
-    for obj in list(getattr(analysis, "Group", [])):
-        proxy_type = get_proxy_type(obj)
-        if proxy_type.startswith("OpenEMS_"):
+    seen = set()
+
+    def _child_objects(obj) -> list:
+        children = []
+        for attr in ("Group", "OutList"):
+            value = getattr(obj, attr, None)
+            if not isinstance(value, (list, tuple)):
+                continue
+            for child in value:
+                if child is None or child is obj:
+                    continue
+                children.append(child)
+
+        linked = getattr(obj, "LinkedObject", None)
+        if linked is not None and linked is not obj:
+            children.append(linked)
+
+        unique = []
+        child_seen = set()
+        for child in children:
+            marker = id(child)
+            if marker in child_seen:
+                continue
+            child_seen.add(marker)
+            unique.append(child)
+        return unique
+
+    stack = list(getattr(analysis, "Group", []))
+    while stack:
+        obj = stack.pop()
+        marker = id(obj)
+        if marker in seen:
             continue
+        seen.add(marker)
+
+        stack.extend(_child_objects(obj))
+
         if bool(getattr(obj, "OpenEMSSimulationBox", False)):
             continue
-        if hasattr(obj, "Shape"):
-            geometry.append(obj)
+        if not hasattr(obj, "Shape"):
+            continue
+
+        proxy_type = get_proxy_type(obj)
+        # Skip OpenEMS feature objects, but still keep traversing their children.
+        if proxy_type.startswith("OpenEMS_"):
+            continue
+        geometry.append(obj)
+
     geometry.sort(key=lambda o: str(getattr(o, "Name", "")))
     return geometry
 
@@ -471,6 +511,54 @@ def _linked_object_names(value) -> list[str]:
     return sorted(set(names))
 
 
+def _child_objects(obj) -> list:
+    children = []
+    for attr in ("Group", "OutList"):
+        value = getattr(obj, attr, None)
+        if not isinstance(value, (list, tuple)):
+            continue
+        for child in value:
+            if child is None or child is obj:
+                continue
+            children.append(child)
+
+    linked = getattr(obj, "LinkedObject", None)
+    if linked is not None and linked is not obj:
+        children.append(linked)
+
+    unique = []
+    seen = set()
+    for child in children:
+        marker = id(child)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        unique.append(child)
+    return unique
+
+
+def _descendant_geometry_names(root) -> list[str]:
+    names = set()
+    seen = set()
+    stack = [root]
+
+    while stack:
+        obj = stack.pop()
+        marker = id(obj)
+        if marker in seen:
+            continue
+        seen.add(marker)
+
+        if hasattr(obj, "Shape"):
+            name = str(getattr(obj, "Name", "") or "").strip()
+            if name:
+                names.add(name)
+
+        stack.extend(_child_objects(obj))
+
+    return sorted(names)
+
+
 def _material_names_by_geometry(material_entries: list[dict]) -> dict[str, list[str]]:
     mapping: dict[str, set[str]] = {}
     for material in material_entries:
@@ -497,7 +585,21 @@ def _materials_by_name(material_entries: list[dict]) -> dict[str, dict]:
 def _material_to_dict(material) -> dict:
     data = _object_to_dict(material, ["EpsilonR", "MuR", "Kappa", "IsPEC", "AssignmentPriority"])
     data["AssignmentPriority"] = int(data.get("AssignmentPriority", 0) or 0)
-    data["AssignedGeometryNames"] = _linked_object_names(getattr(material, "AssignedGeometry", []))
+
+    assigned_names = set(_linked_object_names(getattr(material, "AssignedGeometry", [])))
+
+    # Expand each assigned object to include its descendant geometry leaves.
+    for linked in list(getattr(material, "AssignedGeometry", []) or []):
+        for name in _descendant_geometry_names(linked):
+            assigned_names.add(name)
+
+    # Compatibility path: if no explicit links were stored, allow geometry nested
+    # under the material object to behave as assigned geometry.
+    if not assigned_names:
+        for name in _descendant_geometry_names(material):
+            assigned_names.add(name)
+
+    data["AssignedGeometryNames"] = sorted(assigned_names)
     return data
 
 
