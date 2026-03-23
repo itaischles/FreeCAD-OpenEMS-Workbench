@@ -678,3 +678,69 @@ class OpenEMSSimulationProxy(FeatureProxyBase):
 
 class OpenEMSSimulationViewProvider(ViewProviderBase):
     TYPE = "OpenEMS_SimulationView"
+
+    def _is_simulation_box_helper(self, obj) -> bool:
+        if obj is None:
+            return False
+        if bool(getattr(obj, "OpenEMSSimulationBox", False)):
+            return True
+        name = str(getattr(obj, "Name", "") or "").strip().lower()
+        label = str(getattr(obj, "Label", "") or "").strip().lower()
+        return name.startswith("openemssimulationbox") or label == "openems simulation box"
+
+    def _find_owner_analysis(self):
+        obj = getattr(self, "Object", None)
+        document = getattr(obj, "Document", None)
+        if document is None:
+            return None
+        for candidate in list(getattr(document, "Objects", [])):
+            if get_proxy_type(candidate) != "OpenEMS_Analysis":
+                continue
+            if obj in list(getattr(candidate, "Group", [])):
+                return candidate
+        return None
+
+    def _find_simulation_box(self):
+        analysis = self._find_owner_analysis()
+        if analysis is not None:
+            for member in list(getattr(analysis, "Group", [])):
+                if self._is_simulation_box_helper(member):
+                    return member
+
+        obj = getattr(self, "Object", None)
+        document = getattr(obj, "Document", None)
+        if document is not None:
+            for candidate in list(getattr(document, "Objects", [])):
+                if self._is_simulation_box_helper(candidate):
+                    return candidate
+        return None
+
+    def claimChildren(self):  # noqa: N802 - FreeCAD API
+        box = self._find_simulation_box()
+        return [box] if box is not None else []
+
+    def onChanged(self, vobj, prop: str):  # noqa: N802 - FreeCAD API
+        if str(prop) != "Visibility":
+            return
+
+        is_visible = bool(getattr(vobj, "Visibility", True))
+
+        if is_visible:
+            analysis = self._find_owner_analysis()
+            if analysis is not None:
+                try:
+                    try:
+                        from exporter.document_reader import refresh_simulation_box_for_analysis
+                    except ImportError:
+                        from OpenEMSWorkbench.exporter.document_reader import refresh_simulation_box_for_analysis
+                    refresh_simulation_box_for_analysis(analysis)
+                except Exception:
+                    pass
+
+        box = self._find_simulation_box()
+        view_obj = getattr(box, "ViewObject", None) if box is not None else None
+        if view_obj is not None:
+            try:
+                view_obj.Visibility = is_visible
+            except Exception:
+                pass

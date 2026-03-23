@@ -209,3 +209,41 @@ def test_simulation_proxy_hides_internal_duplicate_properties_in_data_display():
     assert obj._editor_modes.get("TimeStepBudgetStatus") == 2
     assert obj._editor_modes.get("TimeStepBudgetLastReportKey") == 2
 
+
+def test_simulation_viewprovider_claims_simulation_box_helper_child():
+    from OpenEMSWorkbench.objects.simulation_feature import OpenEMSSimulationViewProvider
+
+    class _AnalysisProxy:
+        TYPE = "OpenEMS_Analysis"
+
+    simulation_obj = type("Simulation", (), {})()
+    sim_box = type("SimBox", (), {"OpenEMSSimulationBox": True})()
+    analysis_obj = type("Analysis", (), {"Proxy": _AnalysisProxy(), "Group": []})()
+    analysis_obj.Group = [simulation_obj, sim_box]
+    document = type("Doc", (), {"Objects": [analysis_obj]})()
+    simulation_obj.Document = document
+
+    viewprovider = OpenEMSSimulationViewProvider()
+    viewprovider.attach(type("ViewObj", (), {"Object": simulation_obj})())
+
+    assert viewprovider.claimChildren() == [sim_box]
+
+
+def test_simulation_viewprovider_claims_legacy_simulation_box_by_name_fallback():
+    from OpenEMSWorkbench.objects.simulation_feature import OpenEMSSimulationViewProvider
+
+    class _AnalysisProxy:
+        TYPE = "OpenEMS_Analysis"
+
+    simulation_obj = type("Simulation", (), {})()
+    legacy_box = type("LegacyBox", (), {"Name": "OpenEMSSimulationBox001", "Label": "openEMS Simulation Box"})()
+    analysis_obj = type("Analysis", (), {"Proxy": _AnalysisProxy(), "Group": []})()
+    analysis_obj.Group = [simulation_obj, legacy_box]
+    document = type("Doc", (), {"Objects": [analysis_obj, legacy_box]})()
+    simulation_obj.Document = document
+
+    viewprovider = OpenEMSSimulationViewProvider()
+    viewprovider.attach(type("ViewObj", (), {"Object": simulation_obj})())
+
+    assert viewprovider.claimChildren() == [legacy_box]
+

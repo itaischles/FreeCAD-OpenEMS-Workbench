@@ -254,3 +254,30 @@ def test_waveguide_preview_overlay_definition_adds_coax_circles_when_supported()
     assert overlay["circles"][1]["radius"] == 55.0
     assert overlay["circles"][0]["center"] == (0.2, -0.1, 0.0)
     assert overlay["circles"][0]["normal"] == (0.0, 0.0, 1.0)
+
+
+def test_port_viewprovider_claims_waveguide_preview_helper_child():
+    from OpenEMSWorkbench.objects.port_feature import OpenEMSPortProxy, OpenEMSPortViewProvider
+
+    class _Doc:
+        def __init__(self, objects):
+            self.Objects = objects
+
+    port_obj = type("Port", (), {"Name": "Port1"})()
+    proxy = OpenEMSPortProxy()
+    port_obj.Proxy = proxy
+
+    preview = type(
+        "Preview",
+        (),
+        {
+            "OpenEMSWaveguidePortPlane": True,
+            "OpenEMSWaveguidePortName": "Port1",
+        },
+    )()
+    port_obj.Document = _Doc([preview])
+
+    viewprovider = OpenEMSPortViewProvider()
+    viewprovider.attach(type("ViewObj", (), {"Object": port_obj})())
+
+    assert viewprovider.claimChildren() == [preview]

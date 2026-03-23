@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 try:
+    import FreeCAD as App
+except Exception:  # pragma: no cover - FreeCAD runtime only
+    App = None
+
+try:
     from model import COORDINATE_SYSTEMS, DEFAULTS
+    from meshing import build_mesh_for_analysis
+    from visualization import hide_overlay, show_overlay
+    from utils.analysis_context import get_proxy_type
     from objects.base_feature import (
         FeatureProxyBase,
         ViewProviderBase,
@@ -10,6 +18,9 @@ try:
     )
 except ImportError:
     from OpenEMSWorkbench.model import COORDINATE_SYSTEMS, DEFAULTS
+    from OpenEMSWorkbench.meshing import build_mesh_for_analysis
+    from OpenEMSWorkbench.visualization import hide_overlay, show_overlay
+    from OpenEMSWorkbench.utils.analysis_context import get_proxy_type
     from OpenEMSWorkbench.objects.base_feature import (
         FeatureProxyBase,
         ViewProviderBase,
@@ -80,3 +91,41 @@ class OpenEMSGridProxy(FeatureProxyBase):
 
 class OpenEMSGridViewProvider(ViewProviderBase):
     TYPE = "OpenEMS_GridView"
+
+    def _find_owner_analysis(self):
+        obj = getattr(self, "Object", None)
+        document = getattr(obj, "Document", None)
+        if document is None:
+            return None
+        for candidate in list(getattr(document, "Objects", [])):
+            if get_proxy_type(candidate) != "OpenEMS_Analysis":
+                continue
+            if obj in list(getattr(candidate, "Group", [])):
+                return candidate
+        return None
+
+    def _show_grid_overlay(self) -> None:
+        analysis = self._find_owner_analysis()
+        if analysis is None:
+            return
+        try:
+            _, _, mesh = build_mesh_for_analysis(analysis)
+        except Exception:
+            return
+        show_overlay(mesh)
+
+    def onChanged(self, vobj, prop: str):  # noqa: N802 - FreeCAD API
+        if str(prop) != "Visibility":
+            return
+
+        is_visible = bool(getattr(vobj, "Visibility", True))
+        if not is_visible:
+            hide_overlay()
+            return
+
+        self._show_grid_overlay()
+        if App is not None:
+            try:
+                App.Console.PrintMessage("OpenEMS: Mesh overlay shown from Grid visibility.\n")
+            except Exception:
+                pass

@@ -27,8 +27,6 @@ def test_workbench_command_registry_contains_phase2_commands():
         "OpenEMS_RunSimulation",
         "OpenEMS_ValidateRuntime",
         "OpenEMS_ConfigureRuntime",
-        "OpenEMS_ShowHideMeshOverlay",
-        "OpenEMS_RefreshMeshOverlay",
     }
     assert expected.issubset(set(workbench_commands.WORKBENCH_COMMANDS))
 
@@ -42,7 +40,7 @@ def test_grouped_workbench_layout_exports():
     assert all(len(group) == 2 for group in workbench_commands.WORKBENCH_MENU)
 
     menu_sections = [name for name, _ in workbench_commands.WORKBENCH_MENU]
-    assert menu_sections == ["Create", "Analysis", "Run", "Runtime", "View"]
+    assert menu_sections == ["Create", "Analysis", "Run", "Runtime"]
 
     toolbar_commands = set(workbench_commands.WORKBENCH_TOOLBAR)
     assert "OpenEMS_CreateBoundary" not in toolbar_commands

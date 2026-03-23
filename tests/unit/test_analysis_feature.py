@@ -106,3 +106,36 @@ def test_analysis_viewprovider_claims_group_children_for_tree_nesting():
     viewprovider.attach(_ViewObjectStub())
 
     assert viewprovider.claimChildren() == [child_a, child_b]
+
+
+def test_analysis_viewprovider_filters_helper_children_from_analysis_tree():
+    from OpenEMSWorkbench.objects.analysis_feature import OpenEMSAnalysisViewProvider
+
+    normal_child = object()
+    sim_box_child = type("SimBox", (), {"OpenEMSSimulationBox": True})()
+    port_plane_child = type("PortPlane", (), {"OpenEMSWaveguidePortPlane": True})()
+
+    class _ViewObjectStub:
+        def __init__(self):
+            self.Object = type("Analysis", (), {"Group": [normal_child, sim_box_child, port_plane_child]})()
+
+    viewprovider = OpenEMSAnalysisViewProvider()
+    viewprovider.attach(_ViewObjectStub())
+
+    assert viewprovider.claimChildren() == [normal_child]
+
+
+def test_analysis_viewprovider_filters_legacy_simulation_box_name_fallback():
+    from OpenEMSWorkbench.objects.analysis_feature import OpenEMSAnalysisViewProvider
+
+    normal_child = object()
+    legacy_sim_box = type("LegacyBox", (), {"Name": "OpenEMSSimulationBox", "Label": "openEMS Simulation Box"})()
+
+    class _ViewObjectStub:
+        def __init__(self):
+            self.Object = type("Analysis", (), {"Group": [normal_child, legacy_sim_box]})()
+
+    viewprovider = OpenEMSAnalysisViewProvider()
+    viewprovider.attach(_ViewObjectStub())
+
+    assert viewprovider.claimChildren() == [normal_child]

@@ -77,16 +77,6 @@ except ImportError:
     from OpenEMSWorkbench.meshing import MeshResolutionError, build_mesh_for_active_analysis
 
 try:
-    from visualization import hide_overlay, is_overlay_visible, refresh_overlay, show_overlay
-except ImportError:
-    from OpenEMSWorkbench.visualization import (
-        hide_overlay,
-        is_overlay_visible,
-        refresh_overlay,
-        show_overlay,
-    )
-
-try:
     from utils.runtime_settings import get_saved_solver_executable, set_saved_solver_executable
 except ImportError:
     from OpenEMSWorkbench.utils.runtime_settings import (
@@ -154,8 +144,6 @@ EXPORT_DRY_RUN_COMMAND = "OpenEMS_ExportDryRun"
 RUN_SIMULATION_COMMAND = "OpenEMS_RunSimulation"
 VALIDATE_RUNTIME_COMMAND = "OpenEMS_ValidateRuntime"
 CONFIGURE_RUNTIME_COMMAND = "OpenEMS_ConfigureRuntime"
-SHOW_HIDE_MESH_OVERLAY_COMMAND = "OpenEMS_ShowHideMeshOverlay"
-REFRESH_MESH_OVERLAY_COMMAND = "OpenEMS_RefreshMeshOverlay"
 
 COMMAND_ICON_FILES = {
     EDIT_COMMAND_NAME: "command-edit-selected.svg",
@@ -167,8 +155,6 @@ COMMAND_ICON_FILES = {
     RUN_SIMULATION_COMMAND: "command-run-simulation.svg",
     VALIDATE_RUNTIME_COMMAND: "command-validate-runtime.svg",
     CONFIGURE_RUNTIME_COMMAND: "command-configure-runtime.svg",
-    SHOW_HIDE_MESH_OVERLAY_COMMAND: "command-toggle-mesh.svg",
-    REFRESH_MESH_OVERLAY_COMMAND: "command-refresh-mesh.svg",
 }
 
 CREATE_COMMANDS = list(COMMAND_DEFINITIONS.keys())
@@ -187,10 +173,6 @@ RUNTIME_COMMANDS = [
     VALIDATE_RUNTIME_COMMAND,
     CONFIGURE_RUNTIME_COMMAND,
 ]
-VIEW_COMMANDS = [
-    SHOW_HIDE_MESH_OVERLAY_COMMAND,
-    REFRESH_MESH_OVERLAY_COMMAND,
-]
 
 WORKBENCH_TOOLBAR_COMMANDS = [
     "OpenEMS_CreateAnalysis",
@@ -201,7 +183,6 @@ WORKBENCH_TOOLBAR_COMMANDS = [
     RUN_PREFLIGHT_COMMAND,
     EXPORT_DRY_RUN_COMMAND,
     RUN_SIMULATION_COMMAND,
-    SHOW_HIDE_MESH_OVERLAY_COMMAND,
 ]
 
 WORKBENCH_MENU_GROUPS = [
@@ -209,7 +190,6 @@ WORKBENCH_MENU_GROUPS = [
     ("Analysis", ANALYSIS_COMMANDS),
     ("Run", RUN_COMMANDS),
     ("Runtime", RUNTIME_COMMANDS),
-    ("View", VIEW_COMMANDS),
 ]
 
 WORKBENCH_OBJECT_COMMANDS = (
@@ -217,7 +197,6 @@ WORKBENCH_OBJECT_COMMANDS = (
     + ANALYSIS_COMMANDS
     + RUN_COMMANDS
     + RUNTIME_COMMANDS
-    + VIEW_COMMANDS
 )
 
 
@@ -721,47 +700,6 @@ class _ExportDryRunCommand:
         return App is not None and App.ActiveDocument is not None
 
 
-class _ShowHideMeshOverlayCommand:
-    def GetResources(self):
-        return {
-            "MenuText": "Toggle Mesh Overlay",
-            "ToolTip": "Toggle viewport mesh overlay generated from active analysis grid.",
-            "Pixmap": _command_icon(SHOW_HIDE_MESH_OVERLAY_COMMAND),
-            "Checkable": True,
-        }
-
-    def Activated(self, checked=False):
-        _ = checked
-        if App is None:
-            return
-        doc = App.ActiveDocument
-        if doc is None:
-            App.Console.PrintError("OpenEMS: No active document. Create a document first.\n")
-            return
-
-        if is_overlay_visible():
-            _, message = hide_overlay()
-            App.Console.PrintMessage(f"{message}\n")
-            return
-
-        grid, mesh, error = _resolve_mesh(doc)
-        if error is not None:
-            App.Console.PrintError(f"OpenEMS: {error}\n")
-            return
-
-        _, message = show_overlay(mesh)
-        App.Console.PrintMessage(
-            f"{message} Grid='{getattr(grid, 'Label', 'openEMS Grid')}' "
-            f"({_mesh_cap_summary(grid, mesh)}).\n"
-        )
-
-    def IsActive(self):
-        return App is not None and Gui is not None and App.ActiveDocument is not None
-
-    def IsChecked(self):
-        return bool(is_overlay_visible())
-
-
 class _RunSimulationCommand:
     def GetResources(self):
         return {
@@ -882,37 +820,6 @@ class _RunSimulationCommand:
 
     def IsActive(self):
         return App is not None and App.ActiveDocument is not None
-
-
-class _RefreshMeshOverlayCommand:
-    def GetResources(self):
-        return {
-            "MenuText": "Refresh Mesh Overlay",
-            "ToolTip": "Regenerate and refresh viewport mesh overlay from active analysis grid.",
-            "Pixmap": _command_icon(REFRESH_MESH_OVERLAY_COMMAND),
-        }
-
-    def Activated(self):
-        if App is None:
-            return
-        doc = App.ActiveDocument
-        if doc is None:
-            App.Console.PrintError("OpenEMS: No active document. Create a document first.\n")
-            return
-
-        grid, mesh, error = _resolve_mesh(doc)
-        if error is not None:
-            App.Console.PrintError(f"OpenEMS: {error}\n")
-            return
-
-        _, message = refresh_overlay(mesh)
-        App.Console.PrintMessage(
-            f"{message} Grid='{getattr(grid, 'Label', 'openEMS Grid')}' "
-            f"({_mesh_cap_summary(grid, mesh)}).\n"
-        )
-
-    def IsActive(self):
-        return App is not None and Gui is not None and App.ActiveDocument is not None
 
 
 class _ValidateRuntimeCommand:
@@ -1144,23 +1051,4 @@ def register_object_commands() -> list[str]:
         if App is not None:
             App.Console.PrintError(f"OpenEMS: Failed to register command '{CONFIGURE_RUNTIME_COMMAND}': {exc}\n")
 
-    try:
-        if SHOW_HIDE_MESH_OVERLAY_COMMAND not in Gui.listCommands():
-            Gui.addCommand(SHOW_HIDE_MESH_OVERLAY_COMMAND, _ShowHideMeshOverlayCommand())
-        registered.append(SHOW_HIDE_MESH_OVERLAY_COMMAND)
-    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
-        if App is not None:
-            App.Console.PrintError(
-                f"OpenEMS: Failed to register command '{SHOW_HIDE_MESH_OVERLAY_COMMAND}': {exc}\n"
-            )
-
-    try:
-        if REFRESH_MESH_OVERLAY_COMMAND not in Gui.listCommands():
-            Gui.addCommand(REFRESH_MESH_OVERLAY_COMMAND, _RefreshMeshOverlayCommand())
-        registered.append(REFRESH_MESH_OVERLAY_COMMAND)
-    except Exception as exc:  # pragma: no cover - FreeCAD runtime behavior
-        if App is not None:
-            App.Console.PrintError(
-                f"OpenEMS: Failed to register command '{REFRESH_MESH_OVERLAY_COMMAND}': {exc}\n"
-            )
     return registered

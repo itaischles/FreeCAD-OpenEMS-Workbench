@@ -56,8 +56,24 @@ class OpenEMSAnalysisProxy(FeatureProxyBase):
 class OpenEMSAnalysisViewProvider(ViewProviderBase):
     TYPE = "OpenEMS_AnalysisView"
 
+    def _is_simulation_box_helper(self, obj) -> bool:
+        if obj is None:
+            return False
+        if bool(getattr(obj, "OpenEMSSimulationBox", False)):
+            return True
+        name = str(getattr(obj, "Name", "") or "").strip().lower()
+        label = str(getattr(obj, "Label", "") or "").strip().lower()
+        return name.startswith("openemssimulationbox") or label == "openems simulation box"
+
     def claimChildren(self):  # noqa: N802 - FreeCAD API
         obj = getattr(self, "Object", None)
         if obj is None:
             return []
-        return list(getattr(obj, "Group", []))
+        children = []
+        for member in list(getattr(obj, "Group", [])):
+            if self._is_simulation_box_helper(member):
+                continue
+            if bool(getattr(member, "OpenEMSWaveguidePortPlane", False)):
+                continue
+            children.append(member)
+        return children

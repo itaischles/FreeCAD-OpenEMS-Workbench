@@ -749,3 +749,37 @@ class OpenEMSPortProxy(FeatureProxyBase):
 
 class OpenEMSPortViewProvider(ViewProviderBase):
     TYPE = "OpenEMS_PortView"
+
+    def claimChildren(self):  # noqa: N802 - FreeCAD API
+        obj = getattr(self, "Object", None)
+        proxy = getattr(obj, "Proxy", None)
+        find_preview = getattr(proxy, "_find_preview_object", None)
+        if not callable(find_preview):
+            return []
+        preview = find_preview(obj)
+        return [preview] if preview is not None else []
+
+    def onChanged(self, vobj, prop: str):  # noqa: N802 - FreeCAD API
+        if str(prop) != "Visibility":
+            return
+
+        obj = getattr(self, "Object", None)
+        proxy = getattr(obj, "Proxy", None)
+        if obj is None or proxy is None:
+            return
+
+        if bool(getattr(vobj, "Visibility", True)):
+            refresh_preview = getattr(proxy, "_refresh_waveguide_preview", None)
+            if callable(refresh_preview):
+                try:
+                    refresh_preview(obj)
+                except Exception:
+                    pass
+            return
+
+        hide_preview = getattr(proxy, "_hide_preview", None)
+        if callable(hide_preview):
+            try:
+                hide_preview(obj)
+            except Exception:
+                pass
