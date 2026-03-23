@@ -72,3 +72,27 @@ class OpenEMSMaterialProxy(FeatureProxyBase):
 
 class OpenEMSMaterialViewProvider(ViewProviderBase):
     TYPE = "OpenEMS_MaterialView"
+
+    def claimChildren(self):  # noqa: N802 - FreeCAD API
+        obj = getattr(self, "Object", None)
+        if obj is None:
+            return []
+        return list(getattr(obj, "AssignedGeometry", []))
+
+    def onChanged(self, vobj, prop: str):  # noqa: N802 - FreeCAD API
+        if str(prop) != "Visibility":
+            return
+
+        obj = getattr(self, "Object", None)
+        if obj is None:
+            return
+
+        is_visible = bool(getattr(vobj, "Visibility", True))
+        for child in list(getattr(obj, "AssignedGeometry", [])):
+            view_obj = getattr(child, "ViewObject", None)
+            if view_obj is None:
+                continue
+            try:
+                view_obj.Visibility = is_visible
+            except Exception:
+                continue

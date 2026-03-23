@@ -139,3 +139,21 @@ def test_analysis_viewprovider_filters_legacy_simulation_box_name_fallback():
     viewprovider.attach(_ViewObjectStub())
 
     assert viewprovider.claimChildren() == [normal_child]
+
+
+def test_analysis_viewprovider_hides_geometry_claimed_by_material_children():
+    from OpenEMSWorkbench.objects.analysis_feature import OpenEMSAnalysisViewProvider
+
+    assigned_geo = type("Geo", (), {"Name": "GeoAssigned"})()
+    unassigned_geo = type("Geo", (), {"Name": "GeoUnassigned"})()
+    material_proxy = type("MatProxy", (), {"TYPE": "OpenEMS_Material"})()
+    material = type("Material", (), {"Proxy": material_proxy, "AssignedGeometry": [assigned_geo]})()
+
+    class _ViewObjectStub:
+        def __init__(self):
+            self.Object = type("Analysis", (), {"Group": [material, assigned_geo, unassigned_geo]})()
+
+    viewprovider = OpenEMSAnalysisViewProvider()
+    viewprovider.attach(_ViewObjectStub())
+
+    assert viewprovider.claimChildren() == [material, unassigned_geo]

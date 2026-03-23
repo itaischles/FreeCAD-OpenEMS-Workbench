@@ -81,3 +81,42 @@ def test_material_proxy_restore_keeps_assignment_values():
 
     assert [item.Name for item in obj.AssignedGeometry] == ["GeoA", "GeoB"]
     assert obj.AssignmentPriority == 11
+
+
+def test_material_viewprovider_claims_assigned_geometry_children_for_tree_nesting():
+    from OpenEMSWorkbench.objects.material_feature import OpenEMSMaterialViewProvider
+
+    geo_a = _GeoObj("GeoA")
+    geo_b = _GeoObj("GeoB")
+
+    class _ViewObjectStub:
+        def __init__(self):
+            self.Object = type("Material", (), {"AssignedGeometry": [geo_a, geo_b]})()
+
+    viewprovider = OpenEMSMaterialViewProvider()
+    viewprovider.attach(_ViewObjectStub())
+
+    assert viewprovider.claimChildren() == [geo_a, geo_b]
+
+
+def test_material_viewprovider_propagates_visibility_to_assigned_geometry():
+    from OpenEMSWorkbench.objects.material_feature import OpenEMSMaterialViewProvider
+
+    geo_a = type("Geo", (), {"ViewObject": type("GeoView", (), {"Visibility": True})()})()
+    geo_b = type("Geo", (), {"ViewObject": type("GeoView", (), {"Visibility": True})()})()
+
+    material = type("Material", (), {"AssignedGeometry": [geo_a, geo_b]})()
+    vobj = type("MaterialView", (), {"Object": material, "Visibility": True})()
+
+    viewprovider = OpenEMSMaterialViewProvider()
+    viewprovider.attach(vobj)
+
+    vobj.Visibility = False
+    viewprovider.onChanged(vobj, "Visibility")
+    assert geo_a.ViewObject.Visibility is False
+    assert geo_b.ViewObject.Visibility is False
+
+    vobj.Visibility = True
+    viewprovider.onChanged(vobj, "Visibility")
+    assert geo_a.ViewObject.Visibility is True
+    assert geo_b.ViewObject.Visibility is True
